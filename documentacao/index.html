@@ -54,6 +54,68 @@
       --font-mono: 'JetBrains Mono', Consolas, Menlo, Monaco, monospace;
     }
 
+    /* Neo-Brutalist Dark Mode / High-Contrast Tokens */
+    [data-theme="dark"] {
+      --bg-canvas: #121316;
+      --bg-card: #1C1D22;
+      --bg-dark: #0D0E11;
+      --bg-code: #0F1014;
+      --text-main: #F4F4F0;
+      --text-sub: #D1D5DB;
+      --text-muted: #9CA3AF;
+      --border-color: #000000;
+      --color-gray-soft: #262830;
+      --shadow-sm: 2px 2px 0px #000000;
+      --shadow-md: 4px 4px 0px #000000;
+      --shadow-lg: 6px 6px 0px #000000;
+    }
+    [data-theme="dark"] .nb-card,
+    [data-theme="dark"] .sidebar-widget,
+    [data-theme="dark"] .endpoint-body,
+    [data-theme="dark"] .cascade-box,
+    [data-theme="dark"] .table-container,
+    [data-theme="dark"] .stat-mini-card,
+    [data-theme="dark"] .cascade-step-card,
+    [data-theme="dark"] .mapping-card {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border-color: #000;
+    }
+    [data-theme="dark"] .endpoint-desc-box {
+      background: #25272F;
+      color: #E5E7EB;
+      border-color: #000;
+    }
+    [data-theme="dark"] .nb-table th {
+      background: #23252E;
+      color: var(--color-yellow);
+    }
+    [data-theme="dark"] .nb-table td {
+      border-color: #383A42;
+      color: #F4F4F0;
+    }
+    [data-theme="dark"] .nb-table tr:hover td {
+      background: #2A2D38;
+    }
+    [data-theme="dark"] .sidebar-nav-link {
+      color: #E5E7EB;
+    }
+    [data-theme="dark"] .top-search-input {
+      background: #1C1D22;
+      color: #F4F4F0;
+      border-color: #000;
+    }
+    [data-theme="dark"] .filter-chip {
+      background: #262830;
+      color: #F4F4F0;
+    }
+    [data-theme="dark"] .stat-mini-card {
+      background: #262830;
+    }
+    [data-theme="dark"] .stat-mini-num {
+      color: var(--color-yellow);
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -188,6 +250,7 @@
     .method-post { background: var(--color-yellow); color: #000; }
     .method-put { background: var(--color-purple); color: #fff; }
     .method-delete { background: var(--color-red); color: #fff; }
+    .method-options { background: var(--color-cyan); color: #000; }
 
     /* Syntax Highlighting Tokens */
     .json-key { color: #89DCEB; font-weight: 700; }
@@ -422,6 +485,7 @@
     .filter-chip[data-method="POST"].active { background: var(--color-yellow); color: #000; }
     .filter-chip[data-method="PUT"].active { background: var(--color-purple); color: #fff; }
     .filter-chip[data-method="DELETE"].active { background: var(--color-red); color: #fff; }
+    .filter-chip[data-method="OPTIONS"].active { background: var(--color-cyan); color: #000; }
 
     /* Quick Stats in Sidebar */
     .stat-mini-grid {
@@ -1051,6 +1115,7 @@
       </div>
 
       <div class="header-actions">
+        <button class="nb-btn nb-btn-white nb-btn-sm" id="btn-toggle-theme" title="Alternar Modo Escuro / Alto Contraste">🌓 Modo Escuro</button>
         <button class="nb-btn nb-btn-white nb-btn-sm" id="btn-expand-all">Expandir Todos</button>
         <button class="nb-btn nb-btn-white nb-btn-sm" id="btn-collapse-all">Recolher</button>
         <button class="nb-btn nb-btn-dark nb-btn-sm" id="btn-copy-base-url" data-copy="http://localhost:8000">Base URL 📋</button>
@@ -1070,14 +1135,15 @@
       <div class="sidebar-widget">
         <div class="sidebar-widget-title">
           <span>Filtrar Método</span>
-          <span class="nb-badge nb-badge-yellow" id="badge-total-endpoints">25</span>
+          <span class="nb-badge nb-badge-yellow" id="badge-total-endpoints">28</span>
         </div>
         <div class="filter-chips-grid">
-          <button class="filter-chip active" data-method="ALL">TODOS (25)</button>
-          <button class="filter-chip" data-method="GET">GET (5)</button>
-          <button class="filter-chip" data-method="POST">POST (11)</button>
-          <button class="filter-chip" data-method="PUT">PUT (6)</button>
+          <button class="filter-chip active" data-method="ALL">TODOS (28)</button>
+          <button class="filter-chip" data-method="GET">GET (7)</button>
+          <button class="filter-chip" data-method="POST">POST (12)</button>
+          <button class="filter-chip" data-method="PUT">PUT (5)</button>
           <button class="filter-chip" data-method="DELETE">DELETE (3)</button>
+          <button class="filter-chip" data-method="OPTIONS">OPTIONS (1)</button>
         </div>
       </div>
 
@@ -1103,13 +1169,14 @@
           <span>Navegação Rápida</span>
         </div>
         <ul class="sidebar-nav-list">
-          <li><a href="#visao-geral" class="sidebar-nav-link"><span>🏛️ 1. Visão Geral</span></a></li>
+          <li><a href="#visao-geral" class="sidebar-nav-link"><span>🏛️ 1. Visão Geral & CORS</span></a></li>
           <li><a href="#autenticacao" class="sidebar-nav-link"><span>🔐 2. Autenticação & Tokens</span></a></li>
-          <li><a href="#dicionario-dados" class="sidebar-nav-link"><span>🗄️ 3. Dicionário de Dados</span> <span class="badge-count">2 Tab</span></a></li>
-          <li><a href="#fallback-cascade" class="sidebar-nav-link"><span>🎨 4. Herança Visual</span></a></li>
+          <li><a href="#dicionario-dados" class="sidebar-nav-link"><span>🗄️ 3. Dicionário de Dados</span> <span class="badge-count">5 Tab</span></a></li>
+          <li><a href="#fallback-cascade" class="sidebar-nav-link"><span>🎨 4. Herança Visual & Paleta</span> <span class="badge-count">17 Cores</span></a></li>
           <li><a href="#mapeamento-frontend" class="sidebar-nav-link"><span>🗺️ 5. Mapeamento Frontend</span> <span class="badge-count">8 Telas</span></a></li>
-          <li><a href="#catalogo-endpoints" class="sidebar-nav-link"><span>📡 6. Catálogo de Endpoints</span> <span class="badge-count">25</span></a></li>
-          <li><a href="#guia-status-erros" class="sidebar-nav-link"><span>🧪 7. Erros & Status Codes</span></a></li>
+          <li><a href="#catalogo-endpoints" class="sidebar-nav-link"><span>📡 6. Catálogo de Endpoints</span> <span class="badge-count">28</span></a></li>
+          <li><a href="#testes-qa" class="sidebar-nav-link"><span>🧪 7. Testes Automatizados & QA</span> <span class="badge-count">Pest</span></a></li>
+          <li><a href="#guia-status-erros" class="sidebar-nav-link"><span>🚦 8. Erros & Status Codes</span></a></li>
         </ul>
       </div>
 
@@ -1155,10 +1222,10 @@
         </div>
         <h1 class="hero-title">Portal de Documentação Técnica & Wiki</h1>
         <p class="hero-subtitle">
-          Especificação exaustiva, contratos de dados, matriz de herança visual e catálogo interativo com 25 endpoints REST da plataforma <strong>Assin.art</strong>. Arquitetura em Laravel 11, SQLite local e compatibilidade total com MySQL 8+ e PostgreSQL.
+          Especificação exaustiva, contratos de dados, matriz de herança visual e catálogo interativo com 28 endpoints REST da plataforma <strong>Assin.art</strong>. Arquitetura em Laravel 11, SQLite local e compatibilidade total com MySQL 8+ e PostgreSQL.
         </p>
         <div class="hero-quick-actions">
-          <a href="#catalogo-endpoints" class="nb-btn nb-btn-dark">Ver 25 Endpoints 📡</a>
+          <a href="#catalogo-endpoints" class="nb-btn nb-btn-dark">Ver 28 Endpoints 📡</a>
           <a href="#dicionario-dados" class="nb-btn nb-btn-white">Dicionário de Dados 🗄️</a>
           <a href="#mapeamento-frontend" class="nb-btn nb-btn-purple">Mapeamento Frontend 🗺️</a>
         </div>
@@ -1210,6 +1277,15 @@
               </h4>
               <p style="font-size: 0.85rem; color: var(--text-sub);">
                 Eager loading otimizado para a rota pública <code>GET /{username}</code> executando em query única e contador de cliques atômico <code>GET /r/{id}</code> com incremento direto em banco sem travar a thread.
+              </p>
+            </div>
+
+            <div style="background: var(--bg-canvas); border: 2px solid #000; border-radius: var(--radius-md); padding: 16px; box-shadow: 2px 2px 0px #000;">
+              <h4 style="font-family: var(--font-display); font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                <span class="nb-badge nb-badge-cyan">CORS & Security</span> Integrado
+              </h4>
+              <p style="font-size: 0.85rem; color: var(--text-sub);">
+                CORS configurado para autorizar requisições do frontend Vite local (<code>http://localhost:5173</code>) e produção (<code>https://assin.art</code>) com <code>supports_credentials: true</code> e preflight automático para <code>OPTIONS</code>.
               </p>
             </div>
           </div>
@@ -1664,6 +1740,214 @@ Content-Type: application/json</pre>
             </table>
           </div>
         </div>
+
+        <!-- TABELA AUXILIAR 1: PASSWORD_RESET_TOKENS -->
+        <div class="table-container" style="margin-top: 24px;">
+          <div class="table-header-bar">
+            <div class="table-title">
+              <span class="method-badge method-put" style="min-width: unset; padding: 3px 8px;">TABLE</span>
+              <span>password_reset_tokens</span>
+              <span class="nb-badge nb-badge-white">3 Colunas</span>
+            </div>
+            <div style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-sub);">
+              Tabela Auxiliar de Recuperação de Senha &bull; PK: <code>email</code> (VARCHAR)
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="nb-table">
+              <thead>
+                <tr>
+                  <th>Coluna</th>
+                  <th>Tipo SQL</th>
+                  <th>Nulo?</th>
+                  <th>Padrão</th>
+                  <th>Restrições / Índices</th>
+                  <th>Descrição Funcional</th>
+                  <th>Exemplo Real</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="col-name">email</td>
+                  <td><span class="col-type">VARCHAR(255)</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td><code>PRIMARY KEY</code></td>
+                  <td>E-mail do artista solicitante do reset de senha.</td>
+                  <td><code>"nati@example.com"</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">token</td>
+                  <td><span class="col-type">VARCHAR(255)</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>Hash criptográfico de verificação enviado por e-mail para validar a redefinição de senha.</td>
+                  <td><code>"$2y$12$e8xQ..."</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">created_at</td>
+                  <td><span class="col-type">TIMESTAMP</span></td>
+                  <td><span class="nb-badge nb-badge-green" style="font-size:0.65rem">SIM</span></td>
+                  <td><code>NULL</code></td>
+                  <td>—</td>
+                  <td>Data e hora em que a solicitação de redefinição de senha foi gerada (usada para expiração após 60 min).</td>
+                  <td><code>"2026-10-21 02:30:00"</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA AUXILIAR 2: SESSIONS -->
+        <div class="table-container" style="margin-top: 24px;">
+          <div class="table-header-bar">
+            <div class="table-title">
+              <span class="method-badge method-get" style="min-width: unset; padding: 3px 8px;">TABLE</span>
+              <span>sessions</span>
+              <span class="nb-badge nb-badge-white">6 Colunas</span>
+            </div>
+            <div style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-sub);">
+              Tabela de Sessões Web / SPA &bull; PK: <code>id</code> (VARCHAR)
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="nb-table">
+              <thead>
+                <tr>
+                  <th>Coluna</th>
+                  <th>Tipo SQL</th>
+                  <th>Nulo?</th>
+                  <th>Padrão</th>
+                  <th>Restrições / Índices</th>
+                  <th>Descrição Funcional</th>
+                  <th>Exemplo Real</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="col-name">id</td>
+                  <td><span class="col-type">VARCHAR(255)</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td><code>PRIMARY KEY</code></td>
+                  <td>Identificador alfanumérico único da sessão HTTP.</td>
+                  <td><code>"mR7vX8p..."</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">user_id</td>
+                  <td><span class="col-type">BIGINT UNSIGNED</span></td>
+                  <td><span class="nb-badge nb-badge-green" style="font-size:0.65rem">SIM</span></td>
+                  <td><code>NULL</code></td>
+                  <td><code>INDEX</code></td>
+                  <td>ID do artista autenticado associado à sessão (ou NULL para visitante anônimo).</td>
+                  <td><code>1</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">ip_address</td>
+                  <td><span class="col-type">VARCHAR(45)</span></td>
+                  <td><span class="nb-badge nb-badge-green" style="font-size:0.65rem">SIM</span></td>
+                  <td><code>NULL</code></td>
+                  <td>—</td>
+                  <td>Endereço IP do cliente requisitante (IPv4 ou IPv6).</td>
+                  <td><code>"127.0.0.1"</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">user_agent</td>
+                  <td><span class="col-type">TEXT</span></td>
+                  <td><span class="nb-badge nb-badge-green" style="font-size:0.65rem">SIM</span></td>
+                  <td><code>NULL</code></td>
+                  <td>—</td>
+                  <td>String User-Agent do navegador ou client HTTP do artista.</td>
+                  <td><code>"Mozilla/5.0..."</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">payload</td>
+                  <td><span class="col-type">LONGTEXT</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>Payload de sessão criptografado e serializado do Laravel.</td>
+                  <td><code>"YTo0Ontz..."</code></td>
+                </tr>
+                <tr>
+                  <td class="col-name">last_activity</td>
+                  <td><span class="col-type">INTEGER</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td><code>INDEX</code></td>
+                  <td>Timestamp Unix da última interação na sessão para controle de timeout.</td>
+                  <td><code>1729480800</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABELA AUXILIAR 3: CACHE & CACHE_LOCKS -->
+        <div class="table-container" style="margin-top: 24px;">
+          <div class="table-header-bar">
+            <div class="table-title">
+              <span class="method-badge method-delete" style="min-width: unset; padding: 3px 8px;">TABLE</span>
+              <span>cache & cache_locks</span>
+              <span class="nb-badge nb-badge-white">Cache & Throttling</span>
+            </div>
+            <div style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-sub);">
+              Driver de Cache do Banco de Dados &bull; Rate Limiting & Throttles
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="nb-table">
+              <thead>
+                <tr>
+                  <th>Tabela</th>
+                  <th>Coluna</th>
+                  <th>Tipo SQL</th>
+                  <th>Nulo?</th>
+                  <th>Chave / Índice</th>
+                  <th>Descrição Funcional</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>cache</code></td>
+                  <td class="col-name">key</td>
+                  <td><span class="col-type">VARCHAR(255)</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td><code>PRIMARY KEY</code></td>
+                  <td>Chave de rate limiting (ex: <code>throttle:login:127.0.0.1</code>) ou dados cacheados.</td>
+                </tr>
+                <tr>
+                  <td><code>cache</code></td>
+                  <td class="col-name">value</td>
+                  <td><span class="col-type">MEDIUMTEXT</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td>Contador de tentativas ou valor serializado em cache.</td>
+                </tr>
+                <tr>
+                  <td><code>cache</code></td>
+                  <td class="col-name">expiration</td>
+                  <td><span class="col-type">INTEGER</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td>—</td>
+                  <td>Timestamp Unix de expiração da chave (TTL de throttling de 60 segundos).</td>
+                </tr>
+                <tr>
+                  <td><code>cache_locks</code></td>
+                  <td class="col-name">key / owner / expiration</td>
+                  <td><span class="col-type">VARCHAR / INT</span></td>
+                  <td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">NÃO</span></td>
+                  <td><code>PRIMARY KEY</code></td>
+                  <td>Garante locks atômicos concorrentes durante operações críticas.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- ====================================================================
@@ -1726,6 +2010,187 @@ Content-Type: application/json</pre>
                 <code>resolved_shape =<br>artist.button_shape<br>('square' | 'rounded' | 'pill')</code>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- PALETA OFICIAL DE 17 CORES -->
+        <div class="nb-card" style="padding: 24px; margin-top: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 900;">Paleta Oficial de 17 Cores da Assin.art</h3>
+              <p style="font-size: 0.86rem; color: var(--text-sub);">
+                Cores pré-definidas para fundo da página (<code>artists.background_color</code>) e botões individuais (<code>buttons.button_color</code>). Clique no botão para copiar o código HEX.
+              </p>
+            </div>
+            <span class="nb-badge nb-badge-yellow">17 Swatches</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px;">
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #F7F6F2; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Paper</div><code style="font-size: 0.72rem; color: #666;">#F7F6F2</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#F7F6F2', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #EFECE6; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Linen</div><code style="font-size: 0.72rem; color: #666;">#EFECE6</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#EFECE6', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #F3E7B8; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Butter</div><code style="font-size: 0.72rem; color: #666;">#F3E7B8</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#F3E7B8', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #F6D5BC; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Peach</div><code style="font-size: 0.72rem; color: #666;">#F6D5BC</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#F6D5BC', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #E9C5B5; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Clay</div><code style="font-size: 0.72rem; color: #666;">#E9C5B5</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#E9C5B5', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #E8D5D7; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Rose</div><code style="font-size: 0.72rem; color: #666;">#E8D5D7</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#E8D5D7', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #DAD3EC; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Lavender</div><code style="font-size: 0.72rem; color: #666;">#DAD3EC</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#DAD3EC', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #D5E0EA; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Snow</div><code style="font-size: 0.72rem; color: #666;">#D5E0EA</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#D5E0EA', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #A8CCE4; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Sky</div><code style="font-size: 0.72rem; color: #666;">#A8CCE4</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#A8CCE4', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #C9D9D0; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Sage</div><code style="font-size: 0.72rem; color: #666;">#C9D9D0</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#C9D9D0', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #ACE1AF; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Celadon</div><code style="font-size: 0.72rem; color: #666;">#ACE1AF</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#ACE1AF', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #A9AE86; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Olive</div><code style="font-size: 0.72rem; color: #666;">#A9AE86</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#A9AE86', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #E15B3A; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Terracotta</div><code style="font-size: 0.72rem; color: #666;">#E15B3A</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#E15B3A', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #6B2D3C; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Wine</div><code style="font-size: 0.72rem; color: #666;">#6B2D3C</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#6B2D3C', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #2F4A3C; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Forest</div><code style="font-size: 0.72rem; color: #666;">#2F4A3C</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#2F4A3C', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #1F2B47; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Navy</div><code style="font-size: 0.72rem; color: #666;">#1F2B47</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#1F2B47', this)">📋</button>
+              </div>
+            </div>
+            <div style="border: 2px solid #000; border-radius: var(--radius-md); overflow: hidden; box-shadow: 2px 2px 0px #000; background: #fff;">
+              <div style="height: 52px; background: #121316; border-bottom: 2px solid #000; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff;">Aa</div>
+              <div style="padding: 8px 10px; display: flex; align-items: center; justify-content: space-between;">
+                <div><div style="font-size: 0.78rem; font-weight: 800;">Noir</div><code style="font-size: 0.72rem; color: #666;">#121316</code></div>
+                <button class="copy-btn" style="padding: 2px 6px; font-size: 0.65rem;" onclick="copyText('#121316', this)">📋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CATÁLOGO DAS 17 REDES SOCIAIS -->
+        <div class="nb-card" style="padding: 24px; margin-top: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <div>
+              <h3 style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 900;">Catálogo das 17 Redes Sociais Suportadas</h3>
+              <p style="font-size: 0.86rem; color: var(--text-sub);">
+                Plataformas homologadas para <code>buttons.platform</code> com sanitização automática e geração de ícones SVG.
+              </p>
+            </div>
+            <span class="nb-badge nb-badge-green">17 Plataformas</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="nb-table">
+              <thead>
+                <tr>
+                  <th>Plataforma</th>
+                  <th>Identificador (Slug)</th>
+                  <th>Tipo de Entrada</th>
+                  <th>Prefixo / Esquema</th>
+                  <th>Exemplo de Entrada</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Instagram</strong></td><td><code>instagram</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>instagram.com/</code></td><td><code>natiarte</code></td></tr>
+                <tr><td><strong>WhatsApp</strong></td><td><code>whatsapp</code></td><td><span class="nb-badge nb-badge-green" style="font-size:0.65rem">phone</span></td><td><code>wa.me/55 </code></td><td><code>(11) 99999-9999</code></td></tr>
+                <tr><td><strong>Spotify</strong></td><td><code>spotify</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>open.spotify.com/artist/</code></td><td><code>seu_artista</code></td></tr>
+                <tr><td><strong>YouTube</strong></td><td><code>youtube</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>youtube.com/@</code></td><td><code>seu_canal</code></td></tr>
+                <tr><td><strong>TikTok</strong></td><td><code>tiktok</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>tiktok.com/@</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>X (Twitter)</strong></td><td><code>x</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>x.com/</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>LinkedIn</strong></td><td><code>linkedin</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>linkedin.com/in/</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>Pinterest</strong></td><td><code>pinterest</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>pinterest.com/</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>Threads</strong></td><td><code>threads</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>threads.net/@</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>Behance</strong></td><td><code>behance</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>behance.net/</code></td><td><code>seu_portfolio</code></td></tr>
+                <tr><td><strong>SoundCloud</strong></td><td><code>soundcloud</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>soundcloud.com/</code></td><td><code>seu_perfil</code></td></tr>
+                <tr><td><strong>Twitch</strong></td><td><code>twitch</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>twitch.tv/</code></td><td><code>seu_canal</code></td></tr>
+                <tr><td><strong>Discord</strong></td><td><code>discord</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>discord.gg/</code></td><td><code>seu_servidor</code></td></tr>
+                <tr><td><strong>Telegram</strong></td><td><code>telegram</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>t.me/</code></td><td><code>seu_usuario</code></td></tr>
+                <tr><td><strong>Facebook</strong></td><td><code>facebook</code></td><td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">username</span></td><td><code>facebook.com/</code></td><td><code>sua_pagina</code></td></tr>
+                <tr><td><strong>Website</strong></td><td><code>website</code></td><td><span class="nb-badge nb-badge-cyan" style="font-size:0.65rem">url</span></td><td><code>https://</code></td><td><code>seusite.com</code></td></tr>
+                <tr><td><strong>E-mail</strong></td><td><code>email</code></td><td><span class="nb-badge nb-badge-red" style="font-size:0.65rem">email</span></td><td><code>mailto:</code></td><td><code>seu@email.com</code></td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -1796,6 +2261,34 @@ Content-Type: application/json</pre>
                   <td><span class="nb-badge nb-badge-green">200 OK</span></td>
                 </tr>
                 <tr>
+                  <td rowspan="2"><strong>Recuperação de Senha</strong></td>
+                  <td rowspan="2"><code>ForgotPasswordView.tsx</code></td>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-auth-forgot-password" style="color:#000;font-weight:700;">/api/v1/auth/forgot-password</a></td>
+                  <td>Gera token de recuperação e envia e-mail com link</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-auth-reset-password" style="color:#000;font-weight:700;">/api/v1/auth/reset-password</a></td>
+                  <td>Valida token de reset e atualiza senha do artista</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
+                  <td rowspan="2"><strong>Confirmação de E-mail</strong></td>
+                  <td rowspan="2"><code>EmailConfirmationView.tsx</code></td>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-auth-email-resend" style="color:#000;font-weight:700;">/api/v1/auth/email/resend</a></td>
+                  <td>Reenvio de e-mail de ativação com cooldown de 60 segundos</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-auth-email-verify" style="color:#000;font-weight:700;">/api/v1/auth/email/verify</a></td>
+                  <td>Validação de assinatura de e-mail e marcação de titularidade</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
                   <td><strong>Onboarding 1</strong></td>
                   <td><code>LinkSelectionView.tsx</code></td>
                   <td><span class="method-badge method-put">PUT</span></td>
@@ -1820,8 +2313,8 @@ Content-Type: application/json</pre>
                   <td><span class="nb-badge nb-badge-green">200 OK</span></td>
                 </tr>
                 <tr>
-                  <td rowspan="10"><strong>Painel do Editor</strong></td>
-                  <td rowspan="10"><code>EditorView.tsx</code></td>
+                  <td rowspan="12"><strong>Painel do Editor</strong></td>
+                  <td rowspan="12"><code>EditorView.tsx</code></td>
                   <td><span class="method-badge method-get">GET</span></td>
                   <td><a href="#ep-profile-get" style="color:#000;font-weight:700;">/api/v1/profile</a></td>
                   <td>Carrega todos os dados, avatar, capa e tema do artista</td>
@@ -1882,6 +2375,18 @@ Content-Type: application/json</pre>
                   <td><span class="nb-badge nb-badge-green">200 OK</span></td>
                 </tr>
                 <tr>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-buttons-image-upload" style="color:#000;font-weight:700;">/api/v1/buttons/{id}/image</a></td>
+                  <td>Upload de capa/thumbnail para botão tipo card_featured</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
+                  <td><span class="method-badge method-post">POST</span></td>
+                  <td><a href="#ep-buttons-reorder" style="color:#000;font-weight:700;">/api/v1/buttons/reorder</a></td>
+                  <td>Persistência da nova ordem de botões após Drag & Drop</td>
+                  <td><span class="nb-badge nb-badge-green">200 OK</span></td>
+                </tr>
+                <tr>
                   <td rowspan="2"><strong>Página Pública</strong></td>
                   <td rowspan="2"><code>PublicProfileView.tsx</code></td>
                   <td><span class="method-badge method-get">GET</span></td>
@@ -1902,7 +2407,7 @@ Content-Type: application/json</pre>
       </section>
 
       <!-- ====================================================================
-           SEÇÃO 6: CATÁLOGO INTERATIVO DE ENDPOINTS (25 ROTAS)
+           SEÇÃO 6: CATÁLOGO INTERATIVO DE ENDPOINTS (28 ROTAS)
            ==================================================================== -->
       <section id="catalogo-endpoints">
         <div class="section-header">
@@ -1910,10 +2415,10 @@ Content-Type: application/json</pre>
             <div class="section-title-icon">📡</div>
             <div>
               <h2 class="section-title">6. Catálogo Interativo de Endpoints</h2>
-              <p class="section-subtitle">25 rotas completas com payloads, autorização, parâmetros e exemplos</p>
+              <p class="section-subtitle">28 rotas completas com payloads, autorização, parâmetros e exemplos</p>
             </div>
           </div>
-          <span class="nb-badge nb-badge-yellow" id="endpoints-counter-tag">25 Endpoints Ativos</span>
+          <span class="nb-badge nb-badge-yellow" id="endpoints-counter-tag">28 Endpoints Ativos</span>
         </div>
 
         <div id="endpoints-container">
@@ -5078,19 +5583,370 @@ Content-Type: application/json</pre>
     
         </div>
       </article>
-    
+
+      <!-- ENDPOINT 26: UPLOAD DE THUMBNAIL DE CARD -->
+      <article class="endpoint-item" id="ep-buttons-image-upload" data-method="POST" data-tag="Buttons">
+        <div class="endpoint-header" onclick="toggleEndpoint(this)">
+          <div class="endpoint-meta-left">
+            <span class="method-badge method-post">POST</span>
+            <span class="endpoint-path">/api/v1/buttons/{id}/image</span>
+            <span class="endpoint-title-desc">— Upload de Imagem de Card Featured</span>
+          </div>
+          <div class="endpoint-meta-right">
+            <span class="nb-badge nb-badge-white" style="font-size:0.7rem">Buttons</span>
+            <span class="nb-badge nb-badge-yellow" style="font-size:0.7rem">Bearer Token</span>
+            <div class="endpoint-toggle-icon">▼</div>
+          </div>
+        </div>
+        <div class="endpoint-body">
+          <div class="endpoint-desc-box">
+            Upload e vinculação de thumbnail / capa para botões com formato <code>card_featured</code>. A imagem é validada (JPG, PNG, WebP até 5MB), gravada no storage público em <code>storage/app/public/cards/</code> e o caminho retornado é gravado na coluna <code>buttons.image_url</code>. Verifica rigorosamente a titularidade do botão.
+          </div>
+          
+          <div style="margin-top:16px;">
+            <div class="params-section-title"><span>📥 Parâmetros & Cabeçalhos</span></div>
+            <div class="table-responsive">
+              <table class="nb-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Local</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório?</th>
+                    <th>Descrição</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="col-name">id</td>
+                    <td><span class="nb-badge nb-badge-purple" style="font-size:0.65rem">path</span></td>
+                    <td><code>integer</code></td>
+                    <td><span class="nb-badge nb-badge-red" style="font-size:0.6rem">SIM</span></td>
+                    <td>ID do botão pertencente ao artista autenticado.</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">Authorization</td>
+                    <td><span class="nb-badge nb-badge-white" style="font-size:0.65rem">header</span></td>
+                    <td><code>string</code></td>
+                    <td><span class="nb-badge nb-badge-red" style="font-size:0.6rem">SIM</span></td>
+                    <td>Token Bearer do Sanctum no formato <code>Bearer &lt;token&gt;</code>.</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">image</td>
+                    <td><span class="nb-badge nb-badge-yellow" style="font-size:0.65rem">formData</span></td>
+                    <td><code>file</code></td>
+                    <td><span class="nb-badge nb-badge-red" style="font-size:0.6rem">SIM</span></td>
+                    <td>Arquivo de imagem binária (mimes: jpeg, png, jpg, webp; max: 5120 KB).</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div class="params-section-title"><span>📤 Respostas do Servidor</span></div>
+            <div class="response-tabs-bar">
+              <button class="resp-tab-btn active" data-target="ep-buttons-image-resp-0" data-status="200">200 OK (Sucesso)</button>
+              <button class="resp-tab-btn" data-target="ep-buttons-image-resp-1" data-status="401">401 Unauthorized</button>
+              <button class="resp-tab-btn" data-target="ep-buttons-image-resp-2" data-status="404">404 Not Found</button>
+              <button class="resp-tab-btn" data-target="ep-buttons-image-resp-3" data-status="422">422 Unprocessable</button>
+            </div>
+            <div>
+              <div id="ep-buttons-image-resp-0" class="resp-tab-content" style="display:block;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 200 Response</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Resposta</button>
+                  </div>
+                  <pre class="code-content">{
+  <span class="json-key">"status"</span>: <span class="json-string">"success"</span>,
+  <span class="json-key">"message"</span>: <span class="json-string">"Thumbnail do card atualizado com sucesso."</span>,
+  <span class="json-key">"image_url"</span>: <span class="json-string">"/storage/cards/single_release_art.webp"</span>
+}</pre>
+                </div>
+              </div>
+
+              <div id="ep-buttons-image-resp-1" class="resp-tab-content" style="display:none;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 401 Response</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Resposta</button>
+                  </div>
+                  <pre class="code-content">{
+  <span class="json-key">"message"</span>: <span class="json-string">"Unauthenticated."</span>
+}</pre>
+                </div>
+              </div>
+
+              <div id="ep-buttons-image-resp-2" class="resp-tab-content" style="display:none;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 404 Response</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Resposta</button>
+                  </div>
+                  <pre class="code-content">{
+  <span class="json-key">"message"</span>: <span class="json-string">"Botão não encontrado ou não pertence ao artista autenticado."</span>
+}</pre>
+                </div>
+              </div>
+
+              <div id="ep-buttons-image-resp-3" class="resp-tab-content" style="display:none;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 422 Response</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Resposta</button>
+                  </div>
+                  <pre class="code-content">{
+  <span class="json-key">"message"</span>: <span class="json-string">"O arquivo enviado deve ser uma imagem válida de até 5MB."</span>,
+  <span class="json-key">"errors"</span>: {
+    <span class="json-key">"image"</span>: [
+      <span class="json-string">"O campo image não pode ser superior a 5120 kilobytes."</span>
+    ]
+  }
+}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="params-section-title"><span>⚡ Exemplo de Chamada (cURL)</span></div>
+            <div class="code-box-wrapper">
+              <div class="code-box-header">
+                <span class="code-box-lang">cURL CLI</span>
+                <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar cURL</button>
+              </div>
+              <pre class="code-content">curl -X POST 'http://localhost:8000/api/v1/buttons/1/image' \
+  -H 'Authorization: Bearer 1|sanctum_token...' \
+  -F 'image=@/caminho/para/imagem.webp'</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- ENDPOINT 27: API HEALTH CHECK / ROOT -->
+      <article class="endpoint-item" id="ep-api-health-check" data-method="GET" data-tag="Public">
+        <div class="endpoint-header" onclick="toggleEndpoint(this)">
+          <div class="endpoint-meta-left">
+            <span class="method-badge method-get">GET</span>
+            <span class="endpoint-path">/</span>
+            <span class="endpoint-title-desc">— Status Operacional & Health Check</span>
+          </div>
+          <div class="endpoint-meta-right">
+            <span class="nb-badge nb-badge-white" style="font-size:0.7rem">Public</span>
+            <span class="nb-badge nb-badge-white" style="font-size:0.7rem">Público</span>
+            <div class="endpoint-toggle-icon">▼</div>
+          </div>
+        </div>
+        <div class="endpoint-body">
+          <div class="endpoint-desc-box">
+            Endpoint raiz público da aplicação backend para monitoramento de liveness, readiness probes de orquestradores (Kubernetes/Docker), health checks de balanceadores de carga HTTP e status de uptime da infraestrutura.
+          </div>
+
+          <div style="margin-top:20px;">
+            <div class="params-section-title"><span>📤 Resposta do Servidor</span></div>
+            <div class="response-tabs-bar">
+              <button class="resp-tab-btn active" data-target="ep-health-check-resp-0" data-status="200">200 OK (Operacional)</button>
+            </div>
+            <div>
+              <div id="ep-health-check-resp-0" class="resp-tab-content" style="display:block;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 200 Response</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Resposta</button>
+                  </div>
+                  <pre class="code-content">{
+  <span class="json-key">"app"</span>: <span class="json-string">"Assin.art Backend API"</span>,
+  <span class="json-key">"version"</span>: <span class="json-string">"1.0.0"</span>,
+  <span class="json-key">"status"</span>: <span class="json-string">"operational"</span>
+}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="params-section-title"><span>⚡ Exemplo de Chamada (cURL)</span></div>
+            <div class="code-box-wrapper">
+              <div class="code-box-header">
+                <span class="code-box-lang">cURL CLI</span>
+                <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar cURL</button>
+              </div>
+              <pre class="code-content">curl -X GET 'http://localhost:8000/'</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- ENDPOINT 28: CORS PREFLIGHT -->
+      <article class="endpoint-item" id="ep-cors-preflight" data-method="OPTIONS" data-tag="Public">
+        <div class="endpoint-header" onclick="toggleEndpoint(this)">
+          <div class="endpoint-meta-left">
+            <span class="method-badge method-options">OPTIONS</span>
+            <span class="endpoint-path">/api/v1/{any}</span>
+            <span class="endpoint-title-desc">— CORS Preflight Handshake (Pré-voo)</span>
+          </div>
+          <div class="endpoint-meta-right">
+            <span class="nb-badge nb-badge-white" style="font-size:0.7rem">Public</span>
+            <span class="nb-badge nb-badge-white" style="font-size:0.7rem">Público</span>
+            <div class="endpoint-toggle-icon">▼</div>
+          </div>
+        </div>
+        <div class="endpoint-body">
+          <div class="endpoint-desc-box">
+            Handshake pré-voo (CORS Preflight) processado automaticamente pelo middleware do Laravel para responder às requisições com métodos mutáveis (<code>PUT</code>, <code>POST</code>, <code>DELETE</code>) enviadas pelo frontend Vite (<code>http://localhost:5173</code>) ou produção (<code>https://assin.art</code>). Retorna status 204 No Content com os cabeçalhos de autorização cruzada e credenciais.
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="params-section-title"><span>📥 Cabeçalhos de Requisição de Entrada</span></div>
+            <div class="table-responsive">
+              <table class="nb-table">
+                <thead>
+                  <tr>
+                    <th>Cabeçalho</th>
+                    <th>Tipo</th>
+                    <th>Descrição</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="col-name">Origin</td>
+                    <td><code>string</code></td>
+                    <td>Origem da requisição web (ex: <code>http://localhost:5173</code> ou <code>https://assin.art</code>).</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">Access-Control-Request-Method</td>
+                    <td><code>string</code></td>
+                    <td>Método pretendido para a chamada real (ex: <code>PUT</code>, <code>DELETE</code>).</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">Access-Control-Request-Headers</td>
+                    <td><code>string</code></td>
+                    <td>Lista de headers customizados enviados (ex: <code>Authorization, Content-Type, X-XSRF-TOKEN</code>).</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div class="params-section-title"><span>📤 Cabeçalhos Respondidos pelo Servidor</span></div>
+            <div class="response-tabs-bar">
+              <button class="resp-tab-btn active" data-target="ep-cors-resp-0" data-status="204">204 No Content (Autorizado)</button>
+            </div>
+            <div>
+              <div id="ep-cors-resp-0" class="resp-tab-content" style="display:block;">
+                <div class="code-box-wrapper" style="margin-top:6px;">
+                  <div class="code-box-header">
+                    <span class="code-box-lang">HTTP 204 Headers</span>
+                    <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar Headers</button>
+                  </div>
+                  <pre class="code-content">HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: http://localhost:5173
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-XSRF-TOKEN, Accept
+Access-Control-Allow-Credentials: true
+Access-Control-Max-Age: 86400</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="params-section-title"><span>⚡ Exemplo de Chamada (cURL)</span></div>
+            <div class="code-box-wrapper">
+              <div class="code-box-header">
+                <span class="code-box-lang">cURL CLI</span>
+                <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar cURL</button>
+              </div>
+              <pre class="code-content">curl -I -X OPTIONS 'http://localhost:8000/api/v1/profile' \
+  -H 'Origin: http://localhost:5173' \
+  -H 'Access-Control-Request-Method: PUT' \
+  -H 'Access-Control-Request-Headers: Authorization,Content-Type'</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
         </div>
       </section>
 
       <!-- ====================================================================
-           SEÇÃO 7: GUIA DE CÓDIGOS DE STATUS & ERROS
+           SEÇÃO 7: TESTES AUTOMATIZADOS & QUALITY ASSURANCE
            ==================================================================== -->
-      <section id="guia-status-erros">
+      <section id="testes-qa">
         <div class="section-header">
           <div class="section-title-wrap">
             <div class="section-title-icon">🧪</div>
             <div>
-              <h2 class="section-title">7. Guia de Códigos de Status HTTP & Respostas</h2>
+              <h2 class="section-title">7. Testes Automatizados & Quality Assurance</h2>
+              <p class="section-subtitle">Arquitetura de testes em PHPUnit / Pest, cobertura de fluxos e comandos de execução</p>
+            </div>
+          </div>
+          <span class="nb-badge nb-badge-green">100% Pass Rate</span>
+        </div>
+
+        <div class="nb-card" style="padding: 24px; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            <div>
+              <h3 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 8px;">Como Rodar os Testes Automatizados</h3>
+              <p style="font-size: 0.88rem; color: var(--text-sub); margin-bottom: 14px;">
+                O backend dispõe de uma suíte completa de testes de feature e integração rodando sobre SQLite em memória (<code>:memory:</code>), garantindo execução relâmpago sem persistir dados no banco de desenvolvimento.
+              </p>
+
+              <div class="code-box-wrapper" style="margin-bottom: 12px;">
+                <div class="code-box-header">
+                  <span class="code-box-lang">Comandos Principais</span>
+                  <button class="copy-btn" onclick="copyCodeFromBox(this)">Copiar</button>
+                </div>
+                <pre class="code-content"># Executar todos os testes automatizados da API
+php artisan test
+
+# Executar suíte nativa via PHPUnit
+vendor/bin/phpunit
+
+# Executar teste específico de disponibilidade de username
+php artisan test tests/Feature/UsernameCheckTest.php
+
+# Executar com relatório de cobertura detalhado
+php artisan test --coverage</pre>
+              </div>
+            </div>
+
+            <div>
+              <h3 style="font-family: var(--font-display); font-size: 1.1rem; margin-bottom: 8px;">Níveis de Cobertura (Tiers 1 a 4)</h3>
+              <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 0.86rem;">
+                <li style="display: flex; gap: 8px; align-items: flex-start;">
+                  <span class="nb-badge nb-badge-green" style="font-size: 0.68rem; padding: 1px 6px;">Tier 1</span>
+                  <span><strong>Auth & Username Check:</strong> Sanitização do @, lista de 31 reservados, registro, login com rate limiter de 5/min, logout e /me.</span>
+                </li>
+                <li style="display: flex; gap: 8px; align-items: flex-start;">
+                  <span class="nb-badge nb-badge-yellow" style="font-size: 0.68rem; padding: 1px 6px;">Tier 2</span>
+                  <span><strong>Onboarding 3 Etapas:</strong> Limite de 5 links, bio max 160 chars, paleta de 17 cores, texturas geométricas e formatos de botão.</span>
+                </li>
+                <li style="display: flex; gap: 8px; align-items: flex-start;">
+                  <span class="nb-badge nb-badge-purple" style="font-size: 0.68rem; padding: 1px 6px;">Tier 3</span>
+                  <span><strong>Mídia & Storage:</strong> Upload de avatar (5MB), banner (10MB) e card thumbnail, com auto-exclusão de arquivos antigos para evitar órfãos.</span>
+                </li>
+                <li style="display: flex; gap: 8px; align-items: flex-start;">
+                  <span class="nb-badge nb-badge-cyan" style="font-size: 0.68rem; padding: 1px 6px;">Tier 4</span>
+                  <span><strong>Editor, Drag & Drop e Público:</strong> CRUD de botões com validação de posse, reordenação atômica em transação, 3 estados públicos (found, no_links, not_found) e redirect 302 atômico em /r/{id}.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           SEÇÃO 8: GUIA DE CÓDIGOS DE STATUS & ERROS
+           ==================================================================== -->
+      <section id="guia-status-erros">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <div class="section-title-icon">🚦</div>
+            <div>
+              <h2 class="section-title">8. Guia de Códigos de Status HTTP & Respostas</h2>
               <p class="section-subtitle">Padrões de sucesso, redirecionamento e erros canônicos da API</p>
             </div>
           </div>
@@ -5389,6 +6245,31 @@ Content-Type: application/json</pre>
       if (counterTag) {
         counterTag.innerText = `${visibleCount} Endpoints Visíveis`;
       }
+    }
+
+    // 8. Alternância de Modo Escuro / Alto Contraste
+    const btnToggleTheme = document.getElementById('btn-toggle-theme');
+    const savedTheme = localStorage.getItem('assinart_docs_theme') || 'light';
+    if (savedTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if (btnToggleTheme) btnToggleTheme.innerText = '☀️ Modo Claro';
+    }
+
+    if (btnToggleTheme) {
+      btnToggleTheme.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (isDark) {
+          document.documentElement.removeAttribute('data-theme');
+          localStorage.setItem('assinart_docs_theme', 'light');
+          btnToggleTheme.innerText = '🌓 Modo Escuro';
+          triggerToast('Modo Claro ativado');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          localStorage.setItem('assinart_docs_theme', 'dark');
+          btnToggleTheme.innerText = '☀️ Modo Claro';
+          triggerToast('Modo Escuro / Alto Contraste ativado');
+        }
+      });
     }
   </script>
 </body>

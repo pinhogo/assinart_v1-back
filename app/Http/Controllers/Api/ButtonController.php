@@ -3,15 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ReorderButtonsRequest;
+use App\Http\Requests\StoreButtonRequest;
+use App\Http\Requests\UpdateButtonRequest;
 use App\Models\Button;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class ButtonController extends Controller
 {
     /**
-     * Lista todos os botões do artista logado.
+     * Lista todos os botões do artista autenticado ordenados por order_index ASC.
      */
     public function index(Request $request): JsonResponse
     {
@@ -25,25 +29,19 @@ class ButtonController extends Controller
     }
 
     /**
-     * Cria um novo botão/link.
+     * Cria um novo botão para o artista autenticado.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreButtonRequest $request): JsonResponse
     {
         $artist = $request->user();
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'title' => 'required|string|max:100',
-            'url' => 'required|url|max:2048',
-            'platform' => 'nullable|string|max:50',
-            'type' => 'nullable|in:standard,icon_pill,card_featured',
-            'button_color' => 'nullable|string|max:20',
-            'text_color' => 'nullable|string|max:20',
-            'font_family' => 'nullable|string|max:50',
-            'image_url' => 'nullable|url|max:2048',
-        ]);
+        $validated['platform'] = $validated['platform'] ?? 'custom';
+        $validated['type'] = $validated['type'] ?? 'standard';
+        $validated['is_active'] = true;
 
-        $maxOrder = $artist->buttons()->max('order_index') ?? -1;
-        $validated['order_index'] = $maxOrder + 1;
+        $maxOrder = $artist->buttons()->max('order_index');
+        $validated['order_index'] = is_null($maxOrder) ? 0 : $maxOrder + 1;
 
         $button = $artist->buttons()->create($validated);
 
@@ -55,41 +53,42 @@ class ButtonController extends Controller
     }
 
     /**
-     * Atualiza um botão existente.
+     * Atualiza um botão existente do artista autenticado.
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateButtonRequest $request, int $id): JsonResponse
     {
         $artist = $request->user();
         $button = $artist->buttons()->findOrFail($id);
 
-        $validated = $request->validate([
-            'title' => 'sometimes|required|string|max:100',
-            'url' => 'sometimes|required|url|max:2048',
-            'platform' => 'nullable|string|max:50',
-            'type' => 'nullable|in:standard,icon_pill,card_featured',
-            'button_color' => 'nullable|string|max:20',
-            'text_color' => 'nullable|string|max:20',
-            'font_family' => 'nullable|string|max:50',
-            'image_url' => 'nullable|url|max:2048',
-            'is_active' => 'sometimes|boolean',
-        ]);
-
+        $validated = $request->validated();
         $button->update($validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Botão atualizado com sucesso.',
-            'data' => $button,
+            'data' => $button->fresh(),
         ]);
     }
 
     /**
-     * Exclui um botão.
+     * Remove um botão pertencente ao artista autenticado.
      */
     public function destroy(Request $request, int $id): JsonResponse
     {
         $artist = $request->user();
         $button = $artist->buttons()->findOrFail($id);
+
+        if ($button->image_url) {
+            $parsedPath = parse_url($button->image_url, PHP_URL_PATH) ?? $button->image_url;
+            $relativePath = ltrim(str_replace('/storage/', '', $parsedPath), '/');
+            if (str_starts_with($relativePath, 'storage/')) {
+                $relativePath = substr($relativePath, 8);
+            }
+            if ($relativePath && Storage::disk('public')->exists($relativePath)) {
+                Storage::disk('public')->delete($relativePath);
+            }
+        }
+
         $button->delete();
 
         return response()->json([
@@ -99,29 +98,79 @@ class ButtonController extends Controller
     }
 
     /**
-     * Reordena os botões via Drag & Drop.
+     * Reordena os botões do artista autenticado em transação atômica.
      * Recebe um array com os IDs na nova ordem: { "ordered_ids": [5, 2, 8, 1] }
      */
-    public function reorder(Request $request): JsonResponse
+    public function reorder(ReorderButtonsRequest $request): JsonResponse
     {
         $artist = $request->user();
+        $orderedIds = $request->validated('ordered_ids');
 
-        $validated = $request->validate([
-            'ordered_ids' => 'required|array',
-            'ordered_ids.*' => 'integer|exists:buttons,id',
-        ]);
+        return DB::transaction(function () use ($artist, $orderedIds) {
+            $userButtonIds = $artist->buttons()
+                ->whereIn('id', $orderedIds)
+                ->pluck('id')
+                ->all();
 
-        DB::transaction(function () use ($artist, $validated) {
-            foreach ($validated['ordered_ids'] as $index => $id) {
+            // Garante que TODOS os IDs informados pertencem ao artista logado
+            if (count($userButtonIds) !== count($orderedIds)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Um ou mais botões informados não pertencem ao seu perfil ou não existem.',
+                ], 403);
+            }
+
+            foreach ($orderedIds as $index => $id) {
                 $artist->buttons()
                     ->where('id', $id)
                     ->update(['order_index' => $index]);
             }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Ordem dos botões atualizada com sucesso.',
+            ]);
         });
+    }
+
+    /**
+     * Upload e substituição da imagem/thumbnail para botões do tipo card_featured.
+     */
+    public function uploadImage(Request $request, int $id): JsonResponse
+    {
+        $artist = $request->user();
+        $button = $artist->buttons()->findOrFail($id);
+
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
+        ], [
+            'image.required' => 'O envio de uma imagem é obrigatório.',
+            'image.image' => 'O arquivo enviado deve ser uma imagem válida.',
+            'image.mimes' => 'A imagem deve ser do formato JPEG, PNG, JPG ou WebP.',
+            'image.max' => 'A imagem não pode exceder 5MB.',
+        ]);
+
+        if ($button->image_url) {
+            $parsedPath = parse_url($button->image_url, PHP_URL_PATH) ?? $button->image_url;
+            $oldPath = ltrim(str_replace('/storage/', '', $parsedPath), '/');
+            if (str_starts_with($oldPath, 'storage/')) {
+                $oldPath = substr($oldPath, 8);
+            }
+            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+        }
+
+        $path = $request->file('image')->store('cards', 'public');
+
+        $button->update([
+            'image_url' => Storage::url($path),
+        ]);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Ordem dos botões atualizada com sucesso.',
+            'message' => 'Imagem do card atualizada com sucesso.',
+            'image_url' => $button->image_url,
         ]);
     }
 }

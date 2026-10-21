@@ -52,6 +52,17 @@ class Button extends Model
     }
 
     /**
+     * Atributos adicionais anexados à serialização JSON.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'resolved_font_family',
+        'resolved_text_color',
+        'resolved_button_color',
+    ];
+
+    /**
      * Relacionamento: Artista dono deste botão.
      */
     public function artist(): BelongsTo

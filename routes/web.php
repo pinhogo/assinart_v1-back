@@ -1,13 +1,15 @@
 <?php
 
-use App\Http\Controllers\PublicProfileController;
-use App\Http\Controllers\RedirectController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
+|
+| Web routes for Assin.art v1 backend.
+| Public profile and redirect tracker are loaded via web_public.php.
+|
 */
 
 Route::get('/', function () {
@@ -18,8 +20,4 @@ Route::get('/', function () {
     ]);
 });
 
-// 1. Contador de Cliques & Redirecionamento
-Route::get('/r/{id}', [RedirectController::class, 'redirect'])->name('button.redirect');
-
-// 2. Perfil Público do Artista (assin.art/{username})
-Route::get('/{username}', [PublicProfileController::class, 'show'])->name('artist.public');
+require __DIR__.'/web_public.php';
