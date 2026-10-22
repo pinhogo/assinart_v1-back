@@ -83,9 +83,9 @@ class OnboardingTest extends TestCase
     }
 
     /**
-     * Tier 2: Etapa 1 rejeita mais de 5 links (422).
+     * Tier 2: Etapa 1 rejeita mais de 10 links combinados (422).
      */
-    public function test_step1_rejects_more_than_5_links(): void
+    public function test_step1_rejects_more_than_10_links(): void
     {
         $artist = Artist::factory()->create();
 
@@ -98,6 +98,11 @@ class OnboardingTest extends TestCase
                 ['platform' => 'spotify', 'url' => 'user4'],
                 ['platform' => 'behance', 'url' => 'user5'],
                 ['platform' => 'tiktok', 'url' => 'user6'],
+                ['platform' => 'pinterest', 'url' => 'user7'],
+                ['platform' => 'discord', 'url' => 'user8'],
+                ['platform' => 'twitch', 'url' => 'user9'],
+                ['platform' => 'telegram', 'url' => 'user10'],
+                ['platform' => 'whatsapp', 'url' => 'user11'],
             ],
         ];
 
@@ -304,5 +309,50 @@ class OnboardingTest extends TestCase
         $this->assertEquals('rounded', $artist->button_shape);
         $this->assertNotNull($artist->email_verified_at);
         $this->assertEquals(2, $artist->buttons()->count());
+    }
+
+    /**
+     * Tier 1 (Especificação backend.md): Etapa 3 aceita todas as 7 variantes de sombra de botões.
+     */
+    public function test_button_shadow_accepts_all_seven_variants(): void
+    {
+        $artist = Artist::factory()->create();
+        $shadows = ['none', 'hard_small', 'hard_large', 'soft', 'diffuse', 'elevated', 'colored'];
+
+        foreach ($shadows as $shadow) {
+            $response = $this->actingAs($artist, 'sanctum')
+                ->putJson('/api/v1/onboarding/buttons', [
+                    'button_shape' => 'square',
+                    'button_shadow' => $shadow,
+                ]);
+
+            $response->assertStatus(200)
+                ->assertJson([
+                    'status' => 'success',
+                    'data' => [
+                        'button_shadow' => $shadow,
+                    ],
+                ]);
+
+            $artist->refresh();
+            $this->assertEquals($shadow, $artist->button_shadow);
+        }
+    }
+
+    /**
+     * Tier 2 (Especificação backend.md): Etapa 3 rejeita variante de sombra inválida (422).
+     */
+    public function test_button_shadow_rejects_invalid_variant(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'button_shadow' => 'invalid_shadow_style',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['button_shadow']);
     }
 }

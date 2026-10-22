@@ -34,11 +34,38 @@ class ButtonController extends Controller
     public function store(StoreButtonRequest $request): JsonResponse
     {
         $artist = $request->user();
+
+        // Limite global de 10 botões / links
+        if ($artist->buttons()->count() >= 10) {
+            return response()->json([
+                'message' => 'Limite de 10 links atingido.',
+                'errors' => [
+                    'links' => ['Você pode cadastrar no máximo 10 links combinados entre redes sociais e personalizados.'],
+                ],
+            ], 422);
+        }
+
         $validated = $request->validated();
 
         $validated['platform'] = $validated['platform'] ?? 'custom';
         $validated['type'] = $validated['type'] ?? 'standard';
         $validated['is_active'] = true;
+
+        $displayMode = $validated['display_mode'] ?? 'button';
+        $iconVariant = $validated['icon_variant'] ?? 'default';
+        $showBackground = $validated['show_icon_background'] ?? true;
+
+        // Regra de auto-switch para modo circular
+        if ($displayMode === 'circular') {
+            $showBackground = true;
+            if ($iconVariant === 'none') {
+                $iconVariant = 'default';
+            }
+        }
+
+        $validated['display_mode'] = $displayMode;
+        $validated['icon_variant'] = $iconVariant;
+        $validated['show_icon_background'] = $showBackground;
 
         $maxOrder = $artist->buttons()->max('order_index');
         $validated['order_index'] = is_null($maxOrder) ? 0 : $maxOrder + 1;
@@ -61,6 +88,16 @@ class ButtonController extends Controller
         $button = $artist->buttons()->findOrFail($id);
 
         $validated = $request->validated();
+
+        $targetDisplayMode = $validated['display_mode'] ?? $button->display_mode;
+        if ($targetDisplayMode === 'circular') {
+            $validated['show_icon_background'] = true;
+            $currentIcon = $validated['icon_variant'] ?? $button->icon_variant;
+            if ($currentIcon === 'none') {
+                $validated['icon_variant'] = 'default';
+            }
+        }
+
         $button->update($validated);
 
         return response()->json([
@@ -129,6 +166,9 @@ class ButtonController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => 'Ordem dos botões atualizada com sucesso.',
+                'data' => [
+                    'updated_count' => count($orderedIds),
+                ],
             ]);
         });
     }

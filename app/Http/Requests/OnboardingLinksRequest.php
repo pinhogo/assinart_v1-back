@@ -65,21 +65,26 @@ class OnboardingLinksRequest extends FormRequest
      */
     public function rules(): array
     {
+        $platforms = 'website,youtube,x,linkedin,soundcloud,instagram,spotify,threads,pinterest,discord,whatsapp,tiktok,facebook,behance,telegram,twitch,email,custom';
+
         return [
             'bio' => ['nullable', 'string', 'max:160'],
-            'links' => ['nullable', 'array', 'max:5'],
+            'links' => ['nullable', 'array', 'max:10'],
             'links.*.platform' => [
                 'required_with:links',
                 'string',
-                'in:website,youtube,x,linkedin,soundcloud,instagram,spotify,threads,pinterest,discord,whatsapp,tiktok,facebook,behance,telegram,twitch,email',
+                "in:{$platforms}",
             ],
             'links.*.url' => ['nullable', 'string', 'max:2048'],
             'links.*.value' => ['nullable', 'string', 'max:2048'],
             'links.*.title' => ['nullable', 'string', 'max:100'],
-            'selectedPlatforms' => ['nullable', 'array', 'max:5'],
+            'links.*.display_mode' => ['nullable', 'in:button,circular'],
+            'links.*.icon_variant' => ['nullable', 'in:default,black,white,none'],
+            'links.*.show_icon_background' => ['nullable', 'boolean'],
+            'selectedPlatforms' => ['nullable', 'array', 'max:10'],
             'selectedPlatforms.*' => [
                 'string',
-                'in:website,youtube,x,linkedin,soundcloud,instagram,spotify,threads,pinterest,discord,whatsapp,tiktok,facebook,behance,telegram,twitch,email',
+                "in:{$platforms}",
             ],
             'linkValues' => ['nullable', 'array'],
         ];
@@ -94,8 +99,8 @@ class OnboardingLinksRequest extends FormRequest
     {
         return [
             'bio.max' => 'A biografia não pode ultrapassar 160 caracteres.',
-            'links.max' => 'Você pode cadastrar no máximo 5 links iniciais no onboarding.',
-            'selectedPlatforms.max' => 'Você pode escolher até 5 plataformas para começar.',
+            'links.max' => 'Você pode cadastrar no máximo 10 links combinados entre redes sociais e personalizados.',
+            'selectedPlatforms.max' => 'Você pode escolher até 10 plataformas combinadas no onboarding.',
             'links.*.platform.in' => 'A plataforma informada não é suportada.',
             'selectedPlatforms.*.in' => 'Uma das plataformas selecionadas não é suportada.',
         ];

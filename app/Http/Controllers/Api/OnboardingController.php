@@ -35,7 +35,7 @@ class OnboardingController extends Controller
     ];
 
     /**
-     * Default human-readable labels for the 17 supported networks.
+     * Default human-readable labels for the 17 supported networks + custom.
      */
     public const PLATFORM_TITLES = [
         'website' => 'Website',
@@ -55,10 +55,11 @@ class OnboardingController extends Controller
         'telegram' => 'Telegram',
         'twitch' => 'Twitch',
         'email' => 'E-mail',
+        'custom' => 'Link Personalizado',
     ];
 
     /**
-     * Etapa 1: Salva a bio e sincroniza até 5 links iniciais dentre as 17 redes suportadas.
+     * Etapa 1: Salva a bio e sincroniza até 10 links combinados entre redes sociais e personalizados.
      * Endpoint: PUT /api/v1/onboarding/links
      */
     public function saveLinks(OnboardingLinksRequest $request): JsonResponse
@@ -92,12 +93,12 @@ class OnboardingController extends Controller
 
         $rawLinks = is_array($rawLinks) ? $rawLinks : [];
 
-        // 3. Processa até 5 links válidos
+        // 3. Processa até 10 links válidos
         $parsedButtons = [];
         $count = 0;
 
         foreach ($rawLinks as $item) {
-            if ($count >= 5) {
+            if ($count >= 10) {
                 break;
             }
 
@@ -105,9 +106,9 @@ class OnboardingController extends Controller
                 continue;
             }
 
-            $platform = (string) ($item['platform'] ?? '');
+            $platform = (string) ($item['platform'] ?? 'custom');
             if (!array_key_exists($platform, self::PLATFORM_TITLES)) {
-                continue;
+                $platform = 'custom';
             }
 
             $rawInput = trim((string) ($item['url'] ?? $item['value'] ?? ''));
@@ -117,10 +118,33 @@ class OnboardingController extends Controller
                 ? trim((string) $item['title'])
                 : (self::PLATFORM_TITLES[$platform] ?? ucfirst($platform));
 
+            $displayMode = (isset($item['display_mode']) && in_array($item['display_mode'], ['button', 'circular'], true))
+                ? $item['display_mode']
+                : 'button';
+
+            $iconVariant = (isset($item['icon_variant']) && in_array($item['icon_variant'], ['default', 'black', 'white', 'none'], true))
+                ? $item['icon_variant']
+                : 'default';
+
+            $showBackground = isset($item['show_icon_background'])
+                ? (bool) $item['show_icon_background']
+                : true;
+
+            // Regra: modo circular exige ícone e fundo travado
+            if ($displayMode === 'circular') {
+                $showBackground = true;
+                if ($iconVariant === 'none') {
+                    $iconVariant = 'default';
+                }
+            }
+
             $parsedButtons[] = [
                 'title' => $title,
                 'url' => $formattedUrl,
                 'platform' => $platform,
+                'display_mode' => $displayMode,
+                'icon_variant' => $iconVariant,
+                'show_icon_background' => $showBackground,
                 'type' => 'standard',
                 'order_index' => $count,
                 'clicks_count' => 0,
@@ -142,11 +166,16 @@ class OnboardingController extends Controller
             return $results;
         });
 
+        $totalLinks = count($createdButtons);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Links e bio salvos com sucesso.',
             'data' => [
                 'bio' => $artist->fresh()->bio,
+                'total_links' => $totalLinks,
+                'remaining_slots' => max(0, 10 - $totalLinks),
+                'links' => $createdButtons,
                 'buttons' => $createdButtons,
             ],
         ], 200);
@@ -193,24 +222,47 @@ class OnboardingController extends Controller
     }
 
     /**
-     * Etapa 3: Personalização dos botões, conclusão do onboarding e publicação do perfil.
+     * Etapa 3: Personalização dos botões, estilo de sombra, ícones circulares e cores.
      * Endpoint: PUT /api/v1/onboarding/buttons
      */
     public function saveButtons(OnboardingButtonsRequest $request): JsonResponse
     {
         $artist = $request->user();
 
-        $shape = $request->input('button_shape');
-        $color = $request->input('button_color');
+        $fillableUpdates = [];
 
-        $artist->button_shape = $shape;
-        if ($artist->email_verified_at === null) {
-            $artist->email_verified_at = now();
+        if ($request->has('button_shape')) {
+            $fillableUpdates['button_shape'] = $request->input('button_shape');
         }
-        $artist->save();
+        if ($request->has('button_shadow')) {
+            $fillableUpdates['button_shadow'] = $request->input('button_shadow');
+        }
+        if ($request->has('circular_icon_background')) {
+            $fillableUpdates['circular_icon_background'] = $request->input('circular_icon_background');
+        }
+        if ($request->has('button_color')) {
+            $fillableUpdates['button_color'] = $request->input('button_color');
+        }
+        if ($request->has('button_text_color')) {
+            $fillableUpdates['button_text_color'] = $request->input('button_text_color');
+        }
+        if ($request->has('border_style')) {
+            $fillableUpdates['border_style'] = $request->input('border_style');
+        }
+        if ($request->has('border_color')) {
+            $fillableUpdates['border_color'] = $request->input('border_color');
+        }
 
-        if (!empty($color)) {
-            $artist->buttons()->update(['button_color' => $color]);
+        if ($artist->email_verified_at === null) {
+            $fillableUpdates['email_verified_at'] = now();
+        }
+
+        if (!empty($fillableUpdates)) {
+            $artist->update($fillableUpdates);
+        }
+
+        if (!empty($fillableUpdates['button_color'])) {
+            $artist->buttons()->update(['button_color' => $fillableUpdates['button_color']]);
         }
 
         $fresh = $artist->fresh();
@@ -221,6 +273,12 @@ class OnboardingController extends Controller
             'redirect_url' => '/editor',
             'data' => [
                 'button_shape' => $fresh->button_shape,
+                'button_shadow' => $fresh->button_shadow,
+                'circular_icon_background' => $fresh->circular_icon_background,
+                'button_color' => $fresh->button_color,
+                'button_text_color' => $fresh->button_text_color,
+                'border_style' => $fresh->border_style,
+                'border_color' => $fresh->border_color,
             ],
         ], 200);
     }
@@ -238,6 +296,7 @@ class OnboardingController extends Controller
 
         switch ($platform) {
             case 'website':
+            case 'custom':
                 if (preg_match('#^https?://#i', $input)) {
                     return $input;
                 }

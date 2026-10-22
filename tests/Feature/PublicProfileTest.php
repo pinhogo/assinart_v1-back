@@ -182,4 +182,82 @@ class PublicProfileTest extends TestCase
                 ],
             ]);
     }
+
+    /**
+     * Tier 1 (Especificação backend.md): Página pública particiona circular_links e button_links.
+     */
+    public function test_public_profile_partitions_circular_and_button_links(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'particionado_art',
+            'button_shadow' => 'hard_large',
+            'circular_icon_background' => 'auto',
+        ]);
+
+        // 2 botões circulares
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Instagram Circular',
+            'platform' => 'instagram',
+            'display_mode' => 'circular',
+            'icon_variant' => 'black',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Spotify Circular',
+            'platform' => 'spotify',
+            'display_mode' => 'circular',
+            'icon_variant' => 'white',
+            'is_active' => true,
+            'order_index' => 1,
+        ]);
+
+        // 3 botões em pilha
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Pilha 1',
+            'display_mode' => 'button',
+            'is_active' => true,
+            'order_index' => 2,
+        ]);
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Pilha 2',
+            'display_mode' => 'button',
+            'is_active' => true,
+            'order_index' => 3,
+        ]);
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Pilha 3',
+            'display_mode' => 'button',
+            'is_active' => true,
+            'order_index' => 4,
+        ]);
+
+        $response = $this->getJson('/particionado_art');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'found',
+                'artist' => [
+                    'username' => 'particionado_art',
+                    'button_shadow' => 'hard_large',
+                ],
+            ]);
+
+        $circular = $response->json('circular_links');
+        $buttons = $response->json('button_links');
+
+        $this->assertCount(2, $circular);
+        $this->assertCount(3, $buttons);
+
+        // Validação da resolução de fundo contrastante 'auto' para circulares
+        // icon_variant 'black' -> fundo auto '#FFFFFF'
+        $this->assertEquals('#FFFFFF', $circular[0]['resolved_circular_bg']);
+        // icon_variant 'white' -> fundo auto '#000000'
+        $this->assertEquals('#000000', $circular[1]['resolved_circular_bg']);
+    }
 }

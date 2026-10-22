@@ -61,10 +61,35 @@ class PublicProfileController extends Controller
             ], 404);
         }
 
+        $allButtons = $artist->activeButtons;
+
+        $artistSummary = [
+            'name' => $artist->name,
+            'username' => $artist->username,
+            'bio' => $artist->bio,
+            'avatar_url' => $artist->avatar_url,
+            'avatar_shape' => $artist->avatar_shape,
+            'cover_url' => $artist->cover_url,
+            'background_color' => $artist->background_color,
+            'background_id' => $artist->background_id,
+            'button_shape' => $artist->button_shape,
+            'button_shadow' => $artist->button_shadow,
+            'circular_icon_background' => $artist->circular_icon_background,
+            'font_family' => $artist->font_family,
+            'font_color' => $artist->font_color,
+            'button_color' => $artist->button_color,
+            'button_text_color' => $artist->button_text_color,
+            'border_style' => $artist->border_style,
+            'border_color' => $artist->border_color,
+        ];
+
         // Estado 2: 200 OK com status 'no_links' (quando não há botões ativos cadastrados)
-        if ($artist->activeButtons->isEmpty()) {
+        if ($allButtons->isEmpty()) {
             return response()->json([
                 'status' => 'no_links',
+                'artist' => $artistSummary,
+                'circular_links' => [],
+                'button_links' => [],
                 'data' => [
                     'id' => $artist->id,
                     'name' => $artist->name,
@@ -72,24 +97,61 @@ class PublicProfileController extends Controller
                     'bio' => $artist->bio,
                     'avatar_url' => $artist->avatar_url,
                     'cover_url' => $artist->cover_url,
-                    'theme' => [
-                        'background_color' => $artist->background_color,
-                        'background_id' => $artist->background_id,
-                        'button_shape' => $artist->button_shape,
-                        'avatar_shape' => $artist->avatar_shape,
-                        'font_family' => $artist->font_family,
-                        'font_color' => $artist->font_color,
-                        'border_style' => $artist->border_style,
+                    'theme' => array_merge($artistSummary, [
                         'icon_variant' => $artist->icon_variant,
-                    ],
+                    ]),
                     'buttons' => [],
+                    'circular_links' => [],
+                    'button_links' => [],
                 ],
             ], 200);
         }
 
         // Estado 3: 200 OK com status 'found' (quando há botões ativos com cascade de estilos)
-        $buttons = $artist->activeButtons->map(function ($button) use ($artist) {
-            // Vincula relação em memória para evitar queries N+1 durante resolução de cascade
+        // Particionamento lógico de alta performance (especificação backend.md)
+        $circularLinks = $allButtons->where('display_mode', 'circular')->values()->map(function ($btn) use ($artist) {
+            $btn->setRelation('artist', $artist);
+
+            return [
+                'id' => $btn->id,
+                'title' => $btn->title,
+                'redirect_url' => url("/r/{$btn->id}"),
+                'target_url' => $btn->url,
+                'platform' => $btn->platform,
+                'display_mode' => 'circular',
+                'icon_variant' => $btn->icon_variant,
+                'show_icon_background' => true,
+                'resolved_circular_bg' => $btn->resolved_circular_bg,
+                'order_index' => $btn->order_index,
+            ];
+        })->values()->all();
+
+        $buttonLinks = $allButtons->where('display_mode', 'button')->values()->map(function ($btn) use ($artist) {
+            $btn->setRelation('artist', $artist);
+
+            return [
+                'id' => $btn->id,
+                'title' => $btn->title,
+                'redirect_url' => url("/r/{$btn->id}"),
+                'target_url' => $btn->url,
+                'platform' => $btn->platform,
+                'display_mode' => 'button',
+                'icon_variant' => $btn->icon_variant,
+                'show_icon_background' => $btn->show_icon_background,
+                'resolved_button_color' => $btn->resolved_button_color,
+                'resolved_text_color' => $btn->resolved_text_color,
+                'resolved_font_family' => $btn->resolved_font_family,
+                'resolved_shadow' => $btn->resolved_shadow,
+                'order_index' => $btn->order_index,
+                'styles' => [
+                    'button_color' => $btn->resolved_button_color,
+                    'text_color' => $btn->resolved_text_color,
+                    'font_family' => $btn->resolved_font_family,
+                ],
+            ];
+        })->values()->all();
+
+        $legacyButtons = $allButtons->map(function ($button) use ($artist) {
             $button->setRelation('artist', $artist);
 
             return [
@@ -99,6 +161,9 @@ class PublicProfileController extends Controller
                 'target_url' => $button->url,
                 'platform' => $button->platform,
                 'type' => $button->type,
+                'display_mode' => $button->display_mode,
+                'icon_variant' => $button->icon_variant,
+                'show_icon_background' => $button->show_icon_background,
                 'image_url' => $button->image_url,
                 'styles' => [
                     'button_color' => $button->resolved_button_color,
@@ -110,6 +175,9 @@ class PublicProfileController extends Controller
 
         return response()->json([
             'status' => 'found',
+            'artist' => $artistSummary,
+            'circular_links' => $circularLinks,
+            'button_links' => $buttonLinks,
             'data' => [
                 'id' => $artist->id,
                 'name' => $artist->name,
@@ -117,17 +185,12 @@ class PublicProfileController extends Controller
                 'bio' => $artist->bio,
                 'avatar_url' => $artist->avatar_url,
                 'cover_url' => $artist->cover_url,
-                'theme' => [
-                    'background_color' => $artist->background_color,
-                    'background_id' => $artist->background_id,
-                    'button_shape' => $artist->button_shape,
-                    'avatar_shape' => $artist->avatar_shape,
-                    'font_family' => $artist->font_family,
-                    'font_color' => $artist->font_color,
-                    'border_style' => $artist->border_style,
+                'theme' => array_merge($artistSummary, [
                     'icon_variant' => $artist->icon_variant,
-                ],
-                'buttons' => $buttons,
+                ]),
+                'buttons' => $legacyButtons,
+                'circular_links' => $circularLinks,
+                'button_links' => $buttonLinks,
             ],
         ], 200);
     }

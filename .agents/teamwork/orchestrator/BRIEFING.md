@@ -68,13 +68,17 @@ Build, test, and validate the complete Laravel 11 backend for Assin.art v1 (Phas
 | worker_m4_buttons | teamwork_preview_worker | Milestone 4: Buttons CRUD, Cascade & Reorder | completed | 075fa2c0-fdce-4336-bdb7-b7c03a67d2e4 |
 | worker_m5_public | teamwork_preview_worker | Milestone 5: 3-state Public Profile & 302 Tracker | completed | 051aaccd-e03f-464e-928c-edcfbc39eb26 |
 | writer_e2e_tests | teamwork_preview_test_writer | Dual Track: E2E Feature Test Suite (Tiers 1-4) | completed | 91e68a0f-9c29-46f8-bd0d-cefc25540495 |
-| reviewer_project | teamwork_preview_reviewer | Technical Code & Architecture Review | in-progress | 3d8f5ebb-633c-47b9-a809-256bd2a25b56 |
-| auditor_project | teamwork_preview_auditor | Forensic Integrity Audit (CLEAN / VIOLATION) | in-progress | e37168ce-5a33-4afa-b434-5c35e2aace3d |
+| reviewer_project | teamwork_preview_reviewer | Technical Code & Architecture Review | completed | 3d8f5ebb-633c-47b9-a809-256bd2a25b56 |
+| auditor_project | teamwork_preview_auditor | Forensic Integrity Audit (CLEAN / VIOLATION) | completed | e37168ce-5a33-4afa-b434-5c35e2aace3d |
+| worker_frontend_integration | teamwork_preview_worker | Frontend Integration (Fases 1 a 6 tasks) | failed (quota 429) | 3d9806af-8e92-48da-8000-0f8eea5b603a |
+| worker_frontend_integration_gen2 | teamwork_preview_worker | Frontend Integration (Fases 1 a 6 tasks - Gen 2) | in-progress | c1201591-23a5-42b1-96f0-cf77b44e86c4 |
 
 ## Succession Status
 - Succession required: no
-- Spawn count: 13 / 16
-- Pending subagents: 3d8f5ebb-633c-47b9-a809-256bd2a25b56, e37168ce-5a33-4afa-b434-5c35e2aace3d
+- Spawn count: 15 / 16
+- Pending subagents: c1201591-23a5-42b1-96f0-cf77b44e86c4
+- Predecessor: none
+- Successor: not yet spawned
 - Predecessor: none
 - Successor: not yet spawned
 

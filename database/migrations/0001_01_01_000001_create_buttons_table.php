@@ -19,7 +19,10 @@ return new class extends Migration
 
             $table->string('title', 100);
             $table->string('url', 2048);
-            $table->string('platform', 50)->nullable()->default('custom');
+            $table->string('platform', 50)->default('custom');
+            $table->enum('display_mode', ['button', 'circular'])->default('button');
+            $table->enum('icon_variant', ['default', 'black', 'white', 'none'])->default('default');
+            $table->boolean('show_icon_background')->default(true);
             $table->enum('type', ['standard', 'icon_pill', 'card_featured'])->default('standard');
 
             // Customizações individuais (se null, herda de artists)
@@ -31,12 +34,14 @@ return new class extends Migration
             // Ordenação, cliques e visibilidade
             $table->unsignedInteger('order_index')->default(0);
             $table->unsignedInteger('clicks_count')->default(0);
-            $table->boolean('is_active')->default(true)->index();
+            $table->boolean('is_active')->default(true);
 
             $table->timestamps();
 
-            // Índice composto para buscar botões ordenados com máxima performance
+            // Índices para máxima performance
             $table->index(['artist_id', 'order_index']);
+            $table->index(['artist_id', 'is_active']);
+            $table->index(['artist_id', 'display_mode']);
         });
     }
 

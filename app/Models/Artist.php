@@ -35,10 +35,15 @@ class Artist extends Authenticatable
         'background_color',
         'background_id',
         'button_shape',
+        'button_shadow',
+        'circular_icon_background',
         'avatar_shape',
         'font_family',
         'font_color',
+        'button_color',
+        'button_text_color',
         'border_style',
+        'border_color',
         'icon_variant',
         'email_verified_at',
     ];
@@ -68,7 +73,7 @@ class Artist extends Authenticatable
 
     /**
      * Customização da chave de resolução em rotas (Route Model Binding).
-     * Permite rotas como / {username} automaticamente.
+     * Permite rotas como /{username} automaticamente.
      */
     public function getRouteKeyName(): string
     {
@@ -90,6 +95,28 @@ class Artist extends Authenticatable
     {
         return $this->hasMany(Button::class, 'artist_id')
             ->where('is_active', true)
+            ->orderBy('order_index', 'asc');
+    }
+
+    /**
+     * Coleção de botões em modo circular (abaixo da bio).
+     */
+    public function circularButtons(): HasMany
+    {
+        return $this->hasMany(Button::class, 'artist_id')
+            ->where('is_active', true)
+            ->where('display_mode', 'circular')
+            ->orderBy('order_index', 'asc');
+    }
+
+    /**
+     * Coleção de botões em modo regular (pilha de botões).
+     */
+    public function stackButtons(): HasMany
+    {
+        return $this->hasMany(Button::class, 'artist_id')
+            ->where('is_active', true)
+            ->where('display_mode', 'button')
             ->orderBy('order_index', 'asc');
     }
 }

@@ -334,4 +334,64 @@ class ButtonTest extends TestCase
         $this->assertEquals(1, $btnA2->order_index);
         $this->assertEquals(0, $btnB->order_index);
     }
+
+    /**
+     * Tier 1 (Especificação backend.md): Modo circular força exibição de ícone e container de fundo.
+     */
+    public function test_circular_mode_forces_icon_and_background(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => 'Instagram Circular',
+                'url' => 'https://instagram.com/joaoartista',
+                'platform' => 'instagram',
+                'display_mode' => 'circular',
+                'icon_variant' => 'none',
+                'show_icon_background' => false,
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'display_mode' => 'circular',
+                    'icon_variant' => 'default',
+                    'show_icon_background' => true,
+                ],
+            ]);
+
+        $this->assertDatabaseHas('buttons', [
+            'artist_id' => $artist->id,
+            'title' => 'Instagram Circular',
+            'display_mode' => 'circular',
+            'icon_variant' => 'default',
+            'show_icon_background' => true,
+        ]);
+    }
+
+    /**
+     * Tier 2 (Especificação backend.md): Criação de botão bloqueia ao atingir teto de 10 botões (422).
+     */
+    public function test_store_button_enforces_maximum_of_10_buttons(): void
+    {
+        $artist = Artist::factory()->create();
+
+        // Cria 10 botões
+        Button::factory()->count(10)->create([
+            'artist_id' => $artist->id,
+        ]);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => '11º Botão Proibido',
+                'url' => 'https://example.com/extra',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Limite de 10 links atingido.',
+            ]);
+    }
 }

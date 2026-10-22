@@ -25,16 +25,32 @@ return new class extends Migration
             $table->string('background_color', 20)->default('#FFFFFF');
             $table->string('background_id', 50)->nullable();
             $table->enum('button_shape', ['square', 'rounded', 'pill'])->default('square');
+            $table->enum('button_shadow', [
+                'none',
+                'hard_small',
+                'hard_large',
+                'soft',
+                'diffuse',
+                'elevated',
+                'colored',
+            ])->default('hard_small');
+            $table->string('circular_icon_background', 20)->default('auto');
             $table->enum('avatar_shape', ['circle', 'square', 'rounded'])->default('circle');
             $table->string('font_family', 50)->default('Space Grotesk');
             $table->string('font_color', 20)->default('#000000');
+            $table->string('button_color', 20)->default('#FFE600');
+            $table->string('button_text_color', 20)->default('#000000');
             $table->string('border_style', 30)->default('solid-3px');
-            $table->enum('icon_variant', ['default', 'black_outline', 'white_outline', 'none'])->default('default');
+            $table->string('border_color', 20)->default('#000000');
+            $table->string('icon_variant', 30)->default('default');
 
             // Autenticação & Auditoria
             $table->timestamp('email_verified_at')->nullable();
             $table->rememberToken();
             $table->timestamps();
+
+            $table->index('username');
+            $table->index('email');
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
