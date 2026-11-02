@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 | Endpoints autenticados para gestão de botões do artista:
 | - GET    /api/v1/buttons
 | - POST   /api/v1/buttons
+| - DELETE /api/v1/buttons        (limpeza em massa)
 | - POST   /api/v1/buttons/reorder
 | - POST   /api/v1/buttons/{id}/image
 | - PUT    /api/v1/buttons/{id}
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/buttons', [ButtonController::class, 'index']);
     Route::post('/buttons', [ButtonController::class, 'store']);
+    Route::delete('/buttons', [ButtonController::class, 'destroyAll']);
     Route::post('/buttons/reorder', [ButtonController::class, 'reorder']);
     Route::post('/buttons/{id}/image', [ButtonController::class, 'uploadImage']);
     Route::put('/buttons/{id}', [ButtonController::class, 'update']);

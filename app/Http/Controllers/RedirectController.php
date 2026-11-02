@@ -3,33 +3,34 @@
 namespace App\Http\Controllers;
 
 use App\Models\Button;
+use App\Models\ButtonClick;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class RedirectController extends Controller
 {
     /**
-     * Incrementa atomicamente o contador de cliques e redireciona (HTTP 302).
+     * Incrementa atomicamente o contador de cliques, registra analítico e redireciona (HTTP 302).
      * Rota: GET /r/{id}
-     *
-     * @param int|string $id
-     * @return RedirectResponse
      */
-    public function redirect($id): RedirectResponse
+    public function redirect(Request $request, $id): RedirectResponse
     {
-        // 1. Escopo estrito ao botão ativo
         $button = Button::where('id', $id)
             ->where('is_active', true)
             ->first();
 
-        // 2. Se inexistente ou inativo, aborta com 404
-        if (! $button) {
+        if (!$button) {
             abort(404, 'Link não encontrado ou inativo.');
         }
 
-        // 3. Incremento atômico leve sem locking de tabela
         $button->increment('clicks_count');
 
-        // 4. Redirecionamento imediato HTTP 302 (Found) para a URL de destino
+        ButtonClick::create([
+            'button_id' => $button->id,
+            'visitor_id' => $request->cookie('visitor_id') ?? $request->header('X-Visitor-Id'),
+            'clicked_at' => now(),
+        ]);
+
         return redirect()->away($button->url, 302);
     }
 }

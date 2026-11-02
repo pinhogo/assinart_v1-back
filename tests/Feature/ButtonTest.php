@@ -394,4 +394,57 @@ class ButtonTest extends TestCase
                 'message' => 'Limite de 10 links atingido.',
             ]);
     }
+
+    /**
+     * Tier 1 (Contratos de API): Limpeza em massa de todos os botões do artista autenticado.
+     */
+    public function test_can_clear_all_buttons(): void
+    {
+        $artist = Artist::factory()->create();
+        Button::factory()->count(3)->create(['artist_id' => $artist->id]);
+
+        $this->assertEquals(3, $artist->buttons()->count());
+
+        $response = $this->actingAs($artist, 'sanctum')->deleteJson('/api/v1/buttons');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'message' => 'Todos os botões foram excluídos com sucesso.',
+            ]);
+
+        $this->assertEquals(0, $artist->buttons()->count());
+    }
+
+    /**
+     * Tier 1 (Contratos de API): Suporte a tipo featured e tipografia individual via PATCH.
+     */
+    public function test_can_update_typography_and_featured_type_via_patch(): void
+    {
+        $artist = Artist::factory()->create();
+        $button = Button::factory()->create(['artist_id' => $artist->id]);
+
+        $response = $this->actingAs($artist, 'sanctum')->patchJson("/api/v1/buttons/{$button->id}", [
+            'type' => 'featured',
+            'font_weight' => 'bold',
+            'font_style' => 'italic',
+            'text_border' => 'black',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'id' => $button->id,
+                    'type' => 'featured',
+                    'font_weight' => 'bold',
+                    'font_style' => 'italic',
+                    'text_border' => 'black',
+                ],
+            ]);
+
+        $button->refresh();
+        $this->assertEquals('featured', $button->type);
+        $this->assertEquals('bold', $button->font_weight);
+    }
 }
