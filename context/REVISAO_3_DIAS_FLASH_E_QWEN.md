@@ -44,3 +44,5 @@
 | 2026-11-02T09:36:34-03:00 | `tests/Feature/BackgroundMediaTest.php` | Criado | Antigravity | Testes Feature de background simétrico e PATCH de perfil |
 | 2026-11-02T09:36:48-03:00 | `tests/Feature/MetricsTest.php` | Criado | Antigravity | Testes Feature de telemetria e sumário analítico |
 | 2026-11-02T09:37:21-03:00 | `tests/Feature/ButtonTest.php` | Editado | Antigravity | Testes de limpeza em massa e tipografia individual via PATCH |
+| 2026-11-02T09:44:09-03:00 | `app/Http/Controllers/Api/Concerns/ManagesProfileMedia.php` | Criado | Antigravity | Trait para gestão e expurgo de mídias de perfil |
+| 2026-11-02T09:44:21-03:00 | `app/Http/Controllers/Api/ProfileController.php` | Refatorado | Antigravity | Otimização para cumprimento estrito do limite de 150 linhas |

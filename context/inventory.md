@@ -69,7 +69,8 @@
 | `ButtonTest.php` | `tests/Feature/ButtonTest.php` | CRUD, ordenação atômica, exclusão em massa e validação anti-IDOR |
 | `PublicProfileTest.php` | `tests/Feature/PublicProfileTest.php` | Perfil público `GET /{username}`, partição de links e nó `theme` |
 | `RedirectTest.php` | `tests/Feature/RedirectTest.php` | Redirecionamento `GET /r/{id}` e incremento atômico de métricas |
-| `MediaStorageTest.php` | `tests/Feature/MediaStorageTest.php` | Uploads de avatar, capa e background com prevenção de arquivos órfãos |
+| `MediaStorageTest.php` | `tests/Feature/MediaStorageTest.php` | Uploads de avatar e capa com prevenção de arquivos órfãos |
+| `BackgroundMediaTest.php` | `tests/Feature/BackgroundMediaTest.php` | Uploads de background/wallpaper e mídias polimórficas no PATCH |
 | `MetricsTest.php` | `tests/Feature/MetricsTest.php` | Telemetria `POST /track` e agregação analítica `GET /metrics/summary` |
 | `UsernameCheckTest.php` | `tests/Feature/UsernameCheckTest.php` | Verificação de disponibilidade de @username e rotas reservadas |
 | `CorsSecurityTest.php` | `tests/Feature/CorsSecurityTest.php` | Políticas de CORS e cabeçalhos de segurança |
