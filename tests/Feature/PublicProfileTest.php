@@ -260,4 +260,33 @@ class PublicProfileTest extends TestCase
         // icon_variant 'white' -> fundo auto '#000000'
         $this->assertEquals('#000000', $circular[1]['resolved_circular_bg']);
     }
+
+    /**
+     * FIX-API-05: Endpoint público GET /{username} expõe text_align e show_icon_background reais dos botões.
+     */
+    public function test_public_profile_exposes_text_align_and_show_icon_background(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'alinhamento_art',
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Centralizado',
+            'display_mode' => 'button',
+            'show_icon_background' => false,
+            'text_align' => 'center',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/alinhamento_art');
+
+        $response->assertStatus(200);
+        $buttons = $response->json('button_links');
+        $this->assertCount(1, $buttons);
+        $this->assertEquals('center', $buttons[0]['text_align']);
+        $this->assertEquals('center', $buttons[0]['styles']['text_align']);
+        $this->assertFalse($buttons[0]['show_icon_background']);
+    }
 }

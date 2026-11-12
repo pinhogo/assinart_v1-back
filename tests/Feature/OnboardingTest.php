@@ -355,4 +355,82 @@ class OnboardingTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['button_shadow']);
     }
+
+    /**
+     * FIX-API-05: /onboarding/links preserva title customizado, text_align, show_icon_background=false, is_active e order_index.
+     */
+    public function test_step1_preserves_custom_title_text_align_show_icon_background_default_is_active_and_order(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio com links personalizados',
+                'links' => [
+                    [
+                        'platform' => 'instagram',
+                        'url' => 'artista_insta',
+                        'title' => 'Meu Insta Oficial',
+                        'display_mode' => 'button',
+                        'text_align' => 'center',
+                        'is_active' => false,
+                        'order_index' => 1,
+                        'button_color' => '#2F4A3C',
+                    ],
+                    [
+                        'platform' => 'spotify',
+                        'url' => 'artista_spot',
+                        'display_mode' => 'circular',
+                        'icon_variant' => 'none',
+                        'order_index' => 0,
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+
+        $insta = $artist->buttons()->where('platform', 'instagram')->firstOrFail();
+        $this->assertEquals('Meu Insta Oficial', $insta->title);
+        $this->assertEquals('center', $insta->text_align);
+        $this->assertFalse((bool) $insta->show_icon_background);
+        $this->assertFalse((bool) $insta->is_active);
+        $this->assertEquals(1, $insta->order_index);
+        $this->assertEquals('#2F4A3C', $insta->button_color);
+
+        $spotify = $artist->buttons()->where('platform', 'spotify')->firstOrFail();
+        $this->assertTrue((bool) $spotify->show_icon_background);
+        $this->assertEquals('default', $spotify->icon_variant);
+        $this->assertEquals('left', $spotify->text_align);
+    }
+
+    /**
+     * FIX-API-05: /onboarding/buttons preserva cores individuais por padrão e só limpa com reset_individual_colors=true.
+     */
+    public function test_step3_preserves_individual_button_colors_unless_reset_flag_is_true(): void
+    {
+        $artist = Artist::factory()->create();
+        $customBtn = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'button_color' => '#E15B3A',
+        ]);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'pill',
+                'button_color' => '#FFE600',
+            ])
+            ->assertStatus(200);
+
+        $this->assertEquals('#E15B3A', $customBtn->fresh()->button_color);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'button_color' => '#FFE600',
+                'reset_individual_colors' => true,
+            ])
+            ->assertStatus(200);
+
+        $this->assertNull($customBtn->fresh()->button_color);
+    }
 }

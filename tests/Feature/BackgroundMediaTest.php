@@ -152,4 +152,46 @@ class BackgroundMediaTest extends TestCase
         $this->assertEquals('#000000', $artist->cover_color);
         $this->assertNull($artist->cover_url);
     }
+
+    public function test_patch_profile_accepts_safe_data_image_svg_presets_and_rejects_xss(): void
+    {
+        $artist = Artist::factory()->create([
+            'cover_color' => '#334455',
+            'cover_url' => null,
+            'avatar_url' => null,
+        ]);
+
+        $svgAvatar = 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3C/svg%3E';
+        $svgCover = 'data:image/svg+xml;utf8,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3C/svg%3E';
+
+        $okResponse = $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'avatar_url' => $svgAvatar,
+                'cover_url' => $svgCover,
+            ]);
+
+        $okResponse->assertStatus(200);
+        $artist->refresh();
+        $this->assertEquals($svgAvatar, $artist->avatar_url);
+        $this->assertEquals($svgCover, $artist->cover_url);
+        $this->assertNull($artist->cover_color);
+
+        $solidCoverResponse = $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'cover_color' => '#6B2D3C',
+            ]);
+
+        $solidCoverResponse->assertStatus(200);
+        $artist->refresh();
+        $this->assertEquals('#6B2D3C', $artist->cover_color);
+        $this->assertNull($artist->cover_url);
+
+        $xssResponse = $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'avatar_url' => 'data:image/svg+xml;utf8,%3Csvg%3E%3Cscript%3Ealert(1)%3C/script%3E%3C/svg%3E',
+            ]);
+
+        $xssResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['avatar_url']);
+    }
 }

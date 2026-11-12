@@ -447,4 +447,37 @@ class ButtonTest extends TestCase
         $this->assertEquals('featured', $button->type);
         $this->assertEquals('bold', $button->font_weight);
     }
+
+    /**
+     * FIX-API-05: Botões padrão nascem com show_icon_background = false e suportam text_align.
+     */
+    public function test_store_button_defaults_to_show_icon_background_false_and_persists_text_align(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')->postJson('/api/v1/buttons', [
+            'title' => 'Portfólio Alinhado',
+            'url' => 'https://assin.art/portfolio',
+            'platform' => 'website',
+            'display_mode' => 'button',
+            'text_align' => 'right',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'display_mode' => 'button',
+                    'show_icon_background' => false,
+                    'text_align' => 'right',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('buttons', [
+            'artist_id' => $artist->id,
+            'title' => 'Portfólio Alinhado',
+            'show_icon_background' => false,
+            'text_align' => 'right',
+        ]);
+    }
 }
