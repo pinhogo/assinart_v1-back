@@ -35,7 +35,7 @@ class ProfileController extends Controller
             if (preg_match('#^https?://#i', $trimmed) || str_starts_with($trimmed, '/storage/')) {
                 return;
             }
-            if (preg_match('#^data:image/(svg\+xml|png|jpeg|jpg|webp)(;charset=[^;,]+)?(;base64)?,#i', $trimmed)) {
+            if (preg_match('#^data:image/(svg\+xml|png|jpeg|jpg|webp)(;(?:charset=[^;,]+|utf8))?(;base64)?,#i', $trimmed)) {
                 $decoded = rawurldecode($trimmed);
                 if (preg_match('#(<script|javascript:|vbscript:|\bon[a-z]+\s*=)#i', $decoded)) {
                     $fail("O campo {$attribute} contém conteúdo SVG/data inseguro.");
