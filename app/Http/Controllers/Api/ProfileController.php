@@ -19,11 +19,38 @@ class ProfileController extends Controller
     public function update(Request $request): JsonResponse
     {
         $artist = $request->user();
+        $mediaUrlRule = function (string $attribute, mixed $value, \Closure $fail): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+            if (!is_string($value)) {
+                $fail("O campo {$attribute} deve ser uma URL válida.");
+                return;
+            }
+            $trimmed = trim($value);
+            if (preg_match('/[\x00-\x1F\x7F]/', $trimmed)) {
+                $fail("O campo {$attribute} contém caracteres inválidos.");
+                return;
+            }
+            if (preg_match('#^https?://#i', $trimmed) || str_starts_with($trimmed, '/storage/')) {
+                return;
+            }
+            if (preg_match('#^data:image/(svg\+xml|png|jpeg|jpg|webp)(;charset=[^;,]+)?(;base64)?,#i', $trimmed)) {
+                $decoded = rawurldecode($trimmed);
+                if (preg_match('#(<script|javascript:|vbscript:|\bon[a-z]+\s*=)#i', $decoded)) {
+                    $fail("O campo {$attribute} contém conteúdo SVG/data inseguro.");
+                }
+                return;
+            }
+            $fail("O campo {$attribute} deve usar http(s), /storage/ ou imagem data:image válida.");
+        };
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:100',
             'username' => 'sometimes|required|string|max:50|unique:artists,username,' . $artist->id,
             'bio' => 'nullable|string|max:500',
+            'avatar_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
+            'cover_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
             'background_color' => 'nullable|string|max:20',
             'background_id' => 'nullable|string|max:50',
             'wallpaper_url' => 'nullable|string|max:2048',
@@ -54,8 +81,15 @@ class ProfileController extends Controller
             'icon_variant' => 'nullable|string|max:30',
         ]);
 
-        if ($request->has('avatar') && is_string($request->input('avatar')) && str_starts_with($request->input('avatar'), 'preset:')) {
+        if ($request->has('avatar') && is_string($request->input('avatar')) && str_starts_with($request->input('avatar'), 'preset:') && !$request->has('avatar_url')) {
             $validated['avatar_url'] = null;
+        }
+
+        if ($request->has('cover_url') && !empty($validated['cover_url']) && !$request->has('cover_color') && !$request->has('cover')) {
+            $validated['cover_color'] = null;
+        }
+        if ($request->has('cover_color') && !empty($validated['cover_color']) && !$request->has('cover_url') && !$request->has('cover')) {
+            $validated['cover_url'] = null;
         }
 
         if ($request->has('background') && is_string($bg = $request->input('background'))) {

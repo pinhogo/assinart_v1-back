@@ -27,6 +27,7 @@ class StoreButtonRequest extends FormRequest
             'font_weight' => ['nullable', 'string', 'in:normal,bold'],
             'font_style' => ['nullable', 'string', 'in:normal,italic'],
             'text_border' => ['nullable', 'string', 'in:none,black,white,yellow'],
+            'text_align' => ['nullable', 'string', 'in:left,center,right'],
             'image_url' => ['nullable', 'string', 'max:2048'],
             'is_active' => ['nullable', 'boolean'],
         ];

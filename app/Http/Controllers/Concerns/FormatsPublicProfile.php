@@ -56,6 +56,7 @@ trait FormatsPublicProfile
                 'show_icon_background' => true,
                 'resolved_circular_bg' => $btn->resolved_circular_bg,
                 'order_index' => (int) $btn->order_index,
+                'is_active' => (bool) $btn->is_active,
             ];
         })->values()->all();
     }
@@ -73,13 +74,16 @@ trait FormatsPublicProfile
                 'type' => $btn->type,
                 'display_mode' => 'button',
                 'icon_variant' => $btn->icon_variant,
-                'show_icon_background' => $btn->show_icon_background,
+                'show_icon_background' => (bool) $btn->show_icon_background,
+                'text_align' => $btn->text_align ?? 'left',
+                'button_color' => $btn->button_color,
                 'image_url' => $btn->image_url,
                 'resolved_button_color' => $btn->resolved_button_color,
                 'resolved_text_color' => $btn->resolved_text_color,
                 'resolved_font_family' => $btn->resolved_font_family,
                 'resolved_shadow' => $btn->resolved_shadow,
                 'order_index' => (int) $btn->order_index,
+                'is_active' => (bool) $btn->is_active,
                 'styles' => [
                     'button_color' => $btn->resolved_button_color,
                     'text_color' => $btn->resolved_text_color,
@@ -87,6 +91,7 @@ trait FormatsPublicProfile
                     'font_weight' => $btn->resolved_font_weight,
                     'font_style' => $btn->resolved_font_style,
                     'text_border' => $btn->resolved_text_border,
+                    'text_align' => $btn->text_align ?? 'left',
                 ],
             ];
         })->values()->all();

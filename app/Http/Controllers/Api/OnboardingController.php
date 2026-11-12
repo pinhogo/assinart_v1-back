@@ -112,7 +112,11 @@ class OnboardingController extends Controller
             }
 
             $rawInput = trim((string) ($item['url'] ?? $item['value'] ?? ''));
+            $isActive = array_key_exists('is_active', $item) ? (bool) $item['is_active'] : true;
             $formattedUrl = $this->formatPlatformUrl($platform, $rawInput);
+            if ($formattedUrl === '' && !$isActive) {
+                $formattedUrl = 'https://assin.art';
+            }
 
             $title = !empty($item['title'])
                 ? trim((string) $item['title'])
@@ -126,9 +130,9 @@ class OnboardingController extends Controller
                 ? $item['icon_variant']
                 : 'default';
 
-            $showBackground = isset($item['show_icon_background'])
+            $showBackground = array_key_exists('show_icon_background', $item) && $item['show_icon_background'] !== null
                 ? (bool) $item['show_icon_background']
-                : true;
+                : ($displayMode === 'circular');
 
             // Regra: modo circular exige ícone e fundo travado
             if ($displayMode === 'circular') {
@@ -138,6 +142,14 @@ class OnboardingController extends Controller
                 }
             }
 
+            $textAlign = (isset($item['text_align']) && in_array($item['text_align'], ['left', 'center', 'right'], true))
+                ? $item['text_align']
+                : 'left';
+
+            $orderIndex = (isset($item['order_index']) && is_numeric($item['order_index']))
+                ? max(0, (int) $item['order_index'])
+                : $count;
+
             $parsedButtons[] = [
                 'title' => $title,
                 'url' => $formattedUrl,
@@ -145,10 +157,17 @@ class OnboardingController extends Controller
                 'display_mode' => $displayMode,
                 'icon_variant' => $iconVariant,
                 'show_icon_background' => $showBackground,
+                'text_align' => $textAlign,
+                'button_color' => isset($item['button_color']) && trim((string) $item['button_color']) !== '' ? trim((string) $item['button_color']) : null,
+                'text_color' => isset($item['text_color']) && trim((string) $item['text_color']) !== '' ? trim((string) $item['text_color']) : null,
+                'font_family' => isset($item['font_family']) && trim((string) $item['font_family']) !== '' ? trim((string) $item['font_family']) : null,
+                'font_weight' => (isset($item['font_weight']) && in_array($item['font_weight'], ['normal', 'bold'], true)) ? $item['font_weight'] : null,
+                'font_style' => (isset($item['font_style']) && in_array($item['font_style'], ['normal', 'italic'], true)) ? $item['font_style'] : null,
+                'text_border' => (isset($item['text_border']) && in_array($item['text_border'], ['none', 'black', 'white', 'yellow'], true)) ? $item['text_border'] : null,
                 'type' => 'standard',
-                'order_index' => $count,
+                'order_index' => $orderIndex,
                 'clicks_count' => 0,
-                'is_active' => true,
+                'is_active' => $isActive,
             ];
 
             $count++;
@@ -261,8 +280,8 @@ class OnboardingController extends Controller
             $artist->update($fillableUpdates);
         }
 
-        if (!empty($fillableUpdates['button_color'])) {
-            $artist->buttons()->update(['button_color' => $fillableUpdates['button_color']]);
+        if ($request->boolean('reset_individual_colors')) {
+            $artist->buttons()->update(['button_color' => null]);
         }
 
         $fresh = $artist->fresh();

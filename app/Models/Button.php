@@ -28,6 +28,7 @@ class Button extends Model
         'font_weight',
         'font_style',
         'text_border',
+        'text_align',
         'image_url',
         'order_index',
         'clicks_count',

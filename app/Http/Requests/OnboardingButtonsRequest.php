@@ -48,6 +48,10 @@ class OnboardingButtonsRequest extends FormRequest
         if ($shadow !== null) {
             $merge['button_shadow'] = strtolower(trim((string) $shadow));
         }
+        $resetIndividual = $this->input('reset_individual_colors') ?? $this->input('resetIndividualColors');
+        if ($resetIndividual !== null) {
+            $merge['reset_individual_colors'] = filter_var($resetIndividual, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        }
 
         if (!empty($merge)) {
             $this->merge($merge);
@@ -96,6 +100,10 @@ class OnboardingButtonsRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:30',
+            ],
+            'reset_individual_colors' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

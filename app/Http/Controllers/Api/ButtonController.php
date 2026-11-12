@@ -45,7 +45,9 @@ class ButtonController extends Controller
 
         $displayMode = $validated['display_mode'] ?? 'button';
         $iconVariant = $validated['icon_variant'] ?? 'default';
-        $showBackground = $validated['show_icon_background'] ?? true;
+        $showBackground = array_key_exists('show_icon_background', $validated) && $validated['show_icon_background'] !== null
+            ? (bool) $validated['show_icon_background']
+            : ($displayMode === 'circular');
 
         if ($displayMode === 'circular') {
             $showBackground = true;
@@ -57,6 +59,7 @@ class ButtonController extends Controller
         $validated['display_mode'] = $displayMode;
         $validated['icon_variant'] = $iconVariant;
         $validated['show_icon_background'] = $showBackground;
+        $validated['text_align'] = $validated['text_align'] ?? 'left';
 
         $maxOrder = $artist->buttons()->max('order_index');
         $validated['order_index'] = is_null($maxOrder) ? 0 : $maxOrder + 1;

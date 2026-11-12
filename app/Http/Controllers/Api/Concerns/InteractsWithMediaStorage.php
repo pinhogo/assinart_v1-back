@@ -11,7 +11,7 @@ trait InteractsWithMediaStorage
      */
     protected function extractRelativeStoragePath(?string $url): ?string
     {
-        if (empty($url)) {
+        if (empty($url) || str_starts_with(trim($url), 'data:')) {
             return null;
         }
 
