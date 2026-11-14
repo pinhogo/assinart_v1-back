@@ -256,6 +256,12 @@ class OnboardingController extends Controller
         if ($request->has('button_shadow')) {
             $fillableUpdates['button_shadow'] = $request->input('button_shadow');
         }
+        if ($request->has('button_shadow_color') && $request->input('button_shadow_color') !== null) {
+            $fillableUpdates['button_shadow_color'] = $request->input('button_shadow_color');
+        }
+        if ($request->has('circular_shadow_enabled') && $request->input('circular_shadow_enabled') !== null) {
+            $fillableUpdates['circular_shadow_enabled'] = $request->boolean('circular_shadow_enabled');
+        }
         if ($request->has('circular_icon_background')) {
             $fillableUpdates['circular_icon_background'] = $request->input('circular_icon_background');
         }
@@ -293,6 +299,8 @@ class OnboardingController extends Controller
             'data' => [
                 'button_shape' => $fresh->button_shape,
                 'button_shadow' => $fresh->button_shadow,
+                'button_shadow_color' => $fresh->button_shadow_color ?? '#000000',
+                'circular_shadow_enabled' => (bool) ($fresh->circular_shadow_enabled ?? true),
                 'circular_icon_background' => $fresh->circular_icon_background,
                 'button_color' => $fresh->button_color,
                 'button_text_color' => $fresh->button_text_color,

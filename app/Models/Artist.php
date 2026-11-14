@@ -30,6 +30,8 @@ class Artist extends Authenticatable
         'wallpaper_preset_id',
         'button_shape',
         'button_shadow',
+        'button_shadow_color',
+        'circular_shadow_enabled',
         'circular_icon_background',
         'avatar_shape',
         'font_family',
@@ -72,6 +74,7 @@ class Artist extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'wallpaper_repeat' => 'boolean',
+            'circular_shadow_enabled' => 'boolean',
             'is_published' => 'boolean',
         ];
     }

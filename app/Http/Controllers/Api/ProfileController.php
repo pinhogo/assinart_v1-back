@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ManagesProfileMedia;
 use App\Http\Controllers\Controller;
+use App\Models\Artist;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,12 +14,16 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['status' => 'success', 'data' => $request->user()], 200);
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->serializeArtist($request->user()),
+        ], 200);
     }
 
     public function update(Request $request): JsonResponse
     {
         $artist = $request->user();
+        $this->normalizeShadowInputs($request);
         $mediaUrlRule = function (string $attribute, mixed $value, \Closure $fail): void {
             if ($value === null || $value === '') {
                 return;
@@ -59,6 +64,8 @@ class ProfileController extends Controller
             'cover_color' => 'nullable|string|max:20',
             'button_shape' => 'nullable|in:square,rounded,pill',
             'button_shadow' => 'nullable|string|max:30',
+            'button_shadow_color' => 'nullable|string|max:30',
+            'circular_shadow_enabled' => 'nullable|boolean',
             'circular_icon_background' => 'nullable|string|max:20',
             'avatar_shape' => 'nullable|in:circle,square,rounded',
             'font_family' => 'nullable|string|max:50',
@@ -125,12 +132,62 @@ class ProfileController extends Controller
             $validated['is_published'] = (bool) $validated['is_published'];
         }
 
+        if (array_key_exists('circular_shadow_enabled', $validated)) {
+            if ($validated['circular_shadow_enabled'] === null) {
+                unset($validated['circular_shadow_enabled']);
+            } else {
+                $validated['circular_shadow_enabled'] = (bool) $validated['circular_shadow_enabled'];
+            }
+        }
+
         $artist->update($validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Perfil atualizado com sucesso.',
-            'data' => $artist->fresh(),
+            'data' => $this->serializeArtist($artist->fresh()),
         ], 200);
+    }
+
+    private function normalizeShadowInputs(Request $request): void
+    {
+        $merge = [];
+
+        foreach (['button_shadow_color', 'buttonShadowColor', 'shadowColor'] as $key) {
+            if ($request->has($key)) {
+                $value = $request->input($key);
+                if ($value !== null) {
+                    $merge['button_shadow_color'] = is_string($value) ? trim($value) : $value;
+                } elseif (!$request->has('button_shadow_color')) {
+                    $merge['button_shadow_color'] = null;
+                }
+                break;
+            }
+        }
+
+        foreach (['circular_shadow_enabled', 'circularShadowEnabled'] as $key) {
+            if ($request->has($key)) {
+                $value = $request->input($key);
+                if ($value !== null) {
+                    $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                    $merge['circular_shadow_enabled'] = $parsed ?? $value;
+                } elseif (!$request->has('circular_shadow_enabled')) {
+                    $merge['circular_shadow_enabled'] = null;
+                }
+                break;
+            }
+        }
+
+        if (!empty($merge)) {
+            $request->merge($merge);
+        }
+    }
+
+    private function serializeArtist(Artist $artist): array
+    {
+        return array_merge($artist->toArray(), [
+            'button_shadow_color' => $artist->button_shadow_color ?? '#000000',
+            'circular_shadow_enabled' => (bool) ($artist->circular_shadow_enabled ?? true),
+        ]);
     }
 }
