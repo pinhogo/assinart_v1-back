@@ -201,3 +201,15 @@
     - [x] Validar e normalizar `is_published` e `publication_status` em `PATCH /api/v1/profile`.
     - [x] Bloquear `GET /{username}` com HTTP `404 not_found` para terceiros quando `is_published` é `false`, preservando pré-visualização `200 OK` para o proprietário autenticado via Sanctum.
     - [x] Cobrir o fluxo completo com testes Feature em `tests/Feature/AuthTest.php`, `tests/Feature/PublicProfileTest.php` e `tests/Feature/ProfilePublicationTest.php`.
+
+- [x] **Task 7.2 (`#259` / `FIX-API-06`): Cor Individual de Botão Circular em `GET /{username}`**
+  - **Arquivos:** `app/Models/Button.php`, `app/Http/Controllers/Concerns/FormatsPublicProfile.php`, `tests/Feature/PublicProfileTest.php`
+  - **Escopo:**
+    - [x] Priorize `buttons.button_color` hexadecimal válido em `Button::getResolvedCircularBgAttribute()` (commit `168b9f6`).
+    - [x] Serialize `button_color` e `resolved_button_color` em `FormatsPublicProfile::formatCircularLinks()` (commit `168b9f6`).
+    - [x] Fixe `button_color = null` na fixture circular determinística de `PublicProfileTest` (commit `b84b81b`).
+    - [x] Cubra cor individual `#ACE1AF` com fallback `auto` para `black`, `white` e `default` em `PublicProfileTest`.
+    - [x] Cubra `button_color` vazio ou inválido com fallback por `icon_variant` em `PublicProfileTest`.
+    - [x] Cubra `circular_icon_background` hexadecimal do artista como fallback em `PublicProfileTest`.
+    - [x] Atualize o contrato de `circular_links[]` na seção 7.1 de `context/api_contracts.md`.
+  - **Critério de aceite:** `resolved_circular_bg` retorna `#ACE1AF` para botão circular com `button_color` hexadecimal válido. Execução de `php artisan test` fica a cargo do orquestrador.
