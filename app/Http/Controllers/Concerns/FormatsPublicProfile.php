@@ -54,6 +54,8 @@ trait FormatsPublicProfile
                 'display_mode' => 'circular',
                 'icon_variant' => $btn->icon_variant,
                 'show_icon_background' => true,
+                'button_color' => $btn->button_color,
+                'resolved_button_color' => $btn->resolved_button_color,
                 'resolved_circular_bg' => $btn->resolved_circular_bg,
                 'order_index' => (int) $btn->order_index,
                 'is_active' => (bool) $btn->is_active,

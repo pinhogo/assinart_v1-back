@@ -111,9 +111,14 @@ class Button extends Model
 
     public function getResolvedCircularBgAttribute(): string
     {
+        $individualColor = is_string($this->button_color) ? trim($this->button_color) : '';
+        if ($individualColor !== '' && preg_match('/^#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/', $individualColor)) {
+            return $individualColor;
+        }
+
         $artistSetting = $this->artist?->circular_icon_background ?? 'auto';
 
-        if ($artistSetting !== 'auto' && preg_match('/^#[a-fA-F0-9]{6}$/', $artistSetting)) {
+        if ($artistSetting !== 'auto' && preg_match('/^#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/', $artistSetting)) {
             return $artistSetting;
         }
 
