@@ -33,7 +33,7 @@ class PublicProfileController extends Controller
         if (!$artist->is_published) {
             $viewer = $request->user('sanctum');
             if (!$viewer || (int) $viewer->id !== (int) $artist->id) {
-                return $this->notFoundResponse();
+                return $this->draftResponse();
             }
         }
 
@@ -84,6 +84,17 @@ class PublicProfileController extends Controller
         return response()->json([
             'status' => 'not_found',
             'message' => 'Artista não encontrado.',
+        ], 404);
+    }
+
+    /**
+     * Return a minimal 404 payload for unpublished profiles without exposing artist data.
+     */
+    private function draftResponse(): JsonResponse
+    {
+        return response()->json([
+            'status' => 'draft',
+            'message' => 'Perfil ainda não publicado.',
         ], 404);
     }
 }

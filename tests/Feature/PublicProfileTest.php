@@ -293,7 +293,7 @@ class PublicProfileTest extends TestCase
     }
 
     /**
-     * FIX-API-07: Perfil não publicado retorna 404 not_found para visitante anônimo.
+     * FIX-API-11: Perfil não publicado retorna 404 draft para visitante anônimo.
      */
     public function test_unpublished_profile_returns_404_for_anonymous_visitor(): void
     {
@@ -310,14 +310,14 @@ class PublicProfileTest extends TestCase
         $response = $this->getJson('/rascunho_anonimo');
 
         $response->assertStatus(404)
-            ->assertJson([
-                'status' => 'not_found',
-                'message' => 'Artista não encontrado.',
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
             ]);
     }
 
     /**
-     * FIX-API-07: Perfil não publicado retorna 404 not_found para outro artista autenticado.
+     * FIX-API-11: Perfil não publicado retorna 404 draft para outro artista autenticado.
      */
     public function test_unpublished_profile_returns_404_for_other_authenticated_artist(): void
     {
@@ -334,9 +334,9 @@ class PublicProfileTest extends TestCase
             ->getJson('/rascunho_privado');
 
         $response->assertStatus(404)
-            ->assertJson([
-                'status' => 'not_found',
-                'message' => 'Artista não encontrado.',
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
             ]);
     }
 

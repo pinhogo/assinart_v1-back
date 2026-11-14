@@ -335,7 +335,7 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 
 ### 7.1 Obter Perfil Público (`GET /{username}`)
 - **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
-- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
+- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` com `{ "status": "draft", "message": "Perfil ainda não publicado." }` (sem dados do artista) para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
 - **Resposta de Sucesso (200 OK):**
   ```json
   {
@@ -406,7 +406,9 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
     }
   }
   ```
-- **Respostas de Erro:** `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o artista não existe ou permanece em rascunho para terceiros.
+- **Respostas de Erro:**
+  - `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o `@username` não existe ou é rota reservada.
+  - `404 Not Found` (`{ "status": "draft", "message": "Perfil ainda não publicado." }`, sem dados do artista) quando o artista existe com `is_published: false` para visitante anônimo ou outro artista autenticado.
 
 **Contrato de `circular_links[]`:**
 - Cada item representa um botão com `display_mode` igual a `"circular"` e `is_active` igual a `true`.
