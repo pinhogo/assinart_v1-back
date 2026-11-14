@@ -2,12 +2,52 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ArtistUsername;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 class RegisterRequest extends FormRequest
 {
+    /**
+     * Reserved system usernames kept here until FIX-API-08 centralizes them.
+     *
+     * @var list<string>
+     */
+    public const RESERVED_WORDS = [
+        'admin',
+        'api',
+        'app',
+        'assinart',
+        'auth',
+        'cadastro',
+        'confirmacao-email',
+        'contato',
+        'dashboard',
+        'editor',
+        'email',
+        'entrar',
+        'esqueci-senha',
+        'home',
+        'login',
+        'logout',
+        'null',
+        'perfil',
+        'playground',
+        'privacidade',
+        'r',
+        'register',
+        'root',
+        'sac',
+        'settings',
+        'signin',
+        'signup',
+        'status',
+        'termos',
+        'undefined',
+    ];
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -29,10 +69,10 @@ class RegisterRequest extends FormRequest
             ]);
         }
 
-        if ($this->has('username') && is_string($this->input('username'))) {
-            $clean = strtolower(trim($this->input('username')));
-            $clean = ltrim($clean, '@');
-            $this->merge(['username' => $clean]);
+        if ($this->has('username')) {
+            $this->merge([
+                'username' => ArtistUsername::normalize($this->input('username')),
+            ]);
         }
     }
 
@@ -43,39 +83,6 @@ class RegisterRequest extends FormRequest
      */
     public function rules(): array
     {
-        $reservedWords = [
-            'admin',
-            'api',
-            'app',
-            'assinart',
-            'auth',
-            'cadastro',
-            'confirmacao-email',
-            'contato',
-            'dashboard',
-            'editor',
-            'email',
-            'entrar',
-            'esqueci-senha',
-            'home',
-            'login',
-            'logout',
-            'null',
-            'perfil',
-            'playground',
-            'privacidade',
-            'r',
-            'register',
-            'root',
-            'sac',
-            'settings',
-            'signin',
-            'signup',
-            'status',
-            'termos',
-            'undefined',
-        ];
-
         return [
             'name' => ['required', 'string', 'max:100'],
             'username' => [
@@ -83,13 +90,8 @@ class RegisterRequest extends FormRequest
                 'string',
                 'min:2',
                 'max:30',
-                'regex:/^[a-z0-9_.-]{2,30}$/',
-                'unique:artists,username',
-                function ($attribute, $value, $fail) use ($reservedWords) {
-                    if (in_array(strtolower($value), $reservedWords, true)) {
-                        $fail('Este nome de usuário é reservado pelo sistema.');
-                    }
-                },
+                new ArtistUsername(),
+                Rule::unique('artists', 'username'),
             ],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:artists,email'],
             'password' => ['required', 'string', 'min:6'],
@@ -104,14 +106,9 @@ class RegisterRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
+        return array_merge(ArtistUsername::messages(), [
             'name.required' => 'O nome completo é obrigatório.',
             'name.max' => 'O nome não pode exceder 100 caracteres.',
-            'username.required' => 'O nome de usuário (@) é obrigatório.',
-            'username.min' => 'O nome de usuário deve ter no mínimo 2 caracteres.',
-            'username.max' => 'O nome de usuário deve ter no máximo 30 caracteres.',
-            'username.regex' => 'O @ deve ter entre 2 e 30 caracteres (letras, números, pontos, traços ou sublinhados).',
-            'username.unique' => 'Esse @ já está em uso.',
             'email.required' => 'O e-mail é obrigatório.',
             'email.email' => 'Informe um endereço de e-mail válido.',
             'email.max' => 'O e-mail não pode exceder 255 caracteres.',
@@ -120,7 +117,7 @@ class RegisterRequest extends FormRequest
             'password.min' => 'A senha deve conter pelo menos 6 caracteres.',
             'agree_terms.required' => 'Você precisa concordar com os termos de uso.',
             'agree_terms.accepted' => 'Você precisa concordar com os termos de uso.',
-        ];
+        ]);
     }
 
     /**
