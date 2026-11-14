@@ -201,6 +201,7 @@ class PublicProfileTest extends TestCase
             'platform' => 'instagram',
             'display_mode' => 'circular',
             'icon_variant' => 'black',
+            'button_color' => null,
             'is_active' => true,
             'order_index' => 0,
         ]);
@@ -210,6 +211,7 @@ class PublicProfileTest extends TestCase
             'platform' => 'spotify',
             'display_mode' => 'circular',
             'icon_variant' => 'white',
+            'button_color' => null,
             'is_active' => true,
             'order_index' => 1,
         ]);
