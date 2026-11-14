@@ -47,6 +47,7 @@ class ArtistFactory extends Factory
             'border_style' => 'solid-3px',
             'border_color' => '#000000',
             'icon_variant' => fake()->randomElement(['default', 'black', 'white']),
+            'is_published' => true,
             'email_verified_at' => now(),
             'remember_token' => Str::random(10),
         ];

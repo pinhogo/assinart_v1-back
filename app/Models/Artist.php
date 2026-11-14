@@ -50,6 +50,7 @@ class Artist extends Authenticatable
         'border_style',
         'border_color',
         'icon_variant',
+        'is_published',
         'email_verified_at',
     ];
 
@@ -62,6 +63,7 @@ class Artist extends Authenticatable
         'avatar',
         'cover',
         'background',
+        'publication_status',
     ];
 
     protected function casts(): array
@@ -70,7 +72,16 @@ class Artist extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'wallpaper_repeat' => 'boolean',
+            'is_published' => 'boolean',
         ];
+    }
+
+    /**
+     * Normalized publication state consumed by editor and preview endpoints.
+     */
+    public function getPublicationStatusAttribute(): string
+    {
+        return ($this->is_published ?? true) ? 'published' : 'draft';
     }
 
     public function getRouteKeyName(): string

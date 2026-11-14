@@ -79,6 +79,8 @@ class ProfileController extends Controller
             'border_style' => 'nullable|string|max:30',
             'border_color' => 'nullable|string|max:20',
             'icon_variant' => 'nullable|string|max:30',
+            'is_published' => 'sometimes|boolean',
+            'publication_status' => 'sometimes|in:draft,published',
         ]);
 
         if ($request->has('avatar') && is_string($request->input('avatar')) && str_starts_with($request->input('avatar'), 'preset:') && !$request->has('avatar_url')) {
@@ -110,6 +112,17 @@ class ProfileController extends Controller
                 $validated['cover_color'] = substr($cov, 6);
                 $validated['cover_url'] = null;
             }
+        }
+
+        if (array_key_exists('publication_status', $validated)) {
+            if (!array_key_exists('is_published', $validated)) {
+                $validated['is_published'] = $validated['publication_status'] === 'published';
+            }
+            unset($validated['publication_status']);
+        }
+
+        if (array_key_exists('is_published', $validated)) {
+            $validated['is_published'] = (bool) $validated['is_published'];
         }
 
         $artist->update($validated);

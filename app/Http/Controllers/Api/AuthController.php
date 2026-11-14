@@ -34,20 +34,12 @@ class AuthController extends Controller
             'font_color' => '#000000',
             'border_style' => 'solid-3px',
             'icon_variant' => 'default',
+            'is_published' => false,
         ]);
 
-        $token = $artist->createToken('auth_token')->plainTextToken;
+        $artist = $artist->fresh() ?? $artist;
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Conta criada com sucesso.',
-            'token' => $token,
-            'artist' => $artist,
-            'data' => [
-                'user' => ['id' => $artist->id, 'name' => $artist->name, 'username' => $artist->username, 'email' => $artist->email],
-                'token' => $token,
-            ],
-        ], 201);
+        return $this->respondWithArtistSession($artist, 'Conta criada com sucesso.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -75,18 +67,24 @@ class AuthController extends Controller
         }
 
         RateLimiter::clear($throttleKey);
+
+        return $this->respondWithArtistSession($artist, 'Login realizado com sucesso.', 200);
+    }
+
+    private function respondWithArtistSession(Artist $artist, string $message, int $status): JsonResponse
+    {
         $token = $artist->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Login realizado com sucesso.',
+            'message' => $message,
             'token' => $token,
             'artist' => $artist,
             'data' => [
-                'user' => ['id' => $artist->id, 'name' => $artist->name, 'username' => $artist->username, 'email' => $artist->email],
+                'user' => $artist->only(['id', 'name', 'username', 'email', 'is_published', 'publication_status']),
                 'token' => $token,
             ],
-        ], 200);
+        ], $status);
     }
 
     public function logout(Request $request): JsonResponse
