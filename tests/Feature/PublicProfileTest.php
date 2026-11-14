@@ -374,4 +374,134 @@ class PublicProfileTest extends TestCase
                 ],
             ]);
     }
+
+    /**
+     * FIX-API-06: Botão circular com button_color hexadecimal válido prevalece sobre circular_icon_background 'auto'.
+     */
+    public function test_circular_link_with_individual_button_color_overrides_auto_background(): void
+    {
+        // icon_variant => fundo esperado para o botão irmão com button_color null (fallback 'auto')
+        $variantFallbacks = [
+            'black' => '#FFFFFF',
+            'white' => '#000000',
+            'default' => '#FFFFFF',
+        ];
+
+        foreach ($variantFallbacks as $iconVariant => $autoFallback) {
+            $artist = Artist::factory()->create([
+                'username' => 'circ_cor_' . $iconVariant,
+                'circular_icon_background' => 'auto',
+                'button_color' => '#FFE600',
+            ]);
+
+            $withColor = Button::factory()->create([
+                'artist_id' => $artist->id,
+                'title' => 'WhatsApp',
+                'platform' => 'whatsapp',
+                'display_mode' => 'circular',
+                'icon_variant' => $iconVariant,
+                'button_color' => '#ACE1AF',
+                'is_active' => true,
+                'order_index' => 0,
+            ]);
+
+            $withoutColor = Button::factory()->create([
+                'artist_id' => $artist->id,
+                'title' => 'Instagram',
+                'platform' => 'instagram',
+                'display_mode' => 'circular',
+                'icon_variant' => $iconVariant,
+                'button_color' => null,
+                'is_active' => true,
+                'order_index' => 1,
+            ]);
+
+            $response = $this->getJson('/circ_cor_' . $iconVariant);
+
+            $response->assertStatus(200);
+            $circular = collect($response->json('circular_links'));
+
+            $colored = $circular->firstWhere('id', $withColor->id);
+            $this->assertEquals('#ACE1AF', $colored['button_color']);
+            $this->assertEquals('#ACE1AF', $colored['resolved_button_color']);
+            $this->assertEquals('#ACE1AF', $colored['resolved_circular_bg']);
+
+            $fallback = $circular->firstWhere('id', $withoutColor->id);
+            $this->assertNull($fallback['button_color']);
+            $this->assertEquals('#FFE600', $fallback['resolved_button_color']);
+            $this->assertEquals($autoFallback, $fallback['resolved_circular_bg']);
+        }
+    }
+
+    /**
+     * FIX-API-06: Botão circular com button_color vazio ou inválido usa o fallback 'auto' por icon_variant.
+     */
+    public function test_circular_link_with_empty_or_invalid_button_color_uses_icon_variant_fallback(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'circ_cor_invalida',
+            'circular_icon_background' => 'auto',
+            'button_color' => '#FFE600',
+        ]);
+
+        $emptyColor = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Spotify',
+            'platform' => 'spotify',
+            'display_mode' => 'circular',
+            'icon_variant' => 'white',
+            'button_color' => '',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $invalidColor = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'YouTube',
+            'platform' => 'youtube',
+            'display_mode' => 'circular',
+            'icon_variant' => 'black',
+            'button_color' => 'azul-neon',
+            'is_active' => true,
+            'order_index' => 1,
+        ]);
+
+        $response = $this->getJson('/circ_cor_invalida');
+
+        $response->assertStatus(200);
+        $circular = collect($response->json('circular_links'));
+
+        $this->assertEquals('#000000', $circular->firstWhere('id', $emptyColor->id)['resolved_circular_bg']);
+        $this->assertEquals('#FFFFFF', $circular->firstWhere('id', $invalidColor->id)['resolved_circular_bg']);
+    }
+
+    /**
+     * FIX-API-06: Botão circular sem button_color usa circular_icon_background hexadecimal do artista.
+     */
+    public function test_circular_link_without_button_color_uses_artist_hex_background(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'circ_hex_artista',
+            'circular_icon_background' => '#123456',
+            'button_color' => '#FFE600',
+        ]);
+
+        $button = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Behance',
+            'platform' => 'behance',
+            'display_mode' => 'circular',
+            'icon_variant' => 'white',
+            'button_color' => null,
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/circ_hex_artista');
+
+        $response->assertStatus(200);
+        $circular = collect($response->json('circular_links'))->firstWhere('id', $button->id);
+
+        $this->assertEquals('#123456', $circular['resolved_circular_bg']);
+    }
 }

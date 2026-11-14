@@ -356,7 +356,23 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
       "font_family": "Space Grotesk",
       "font_color": "#000000"
     },
-    "circular_links": [],
+    "circular_links": [
+      {
+        "id": 12,
+        "title": "WhatsApp",
+        "redirect_url": "https://assin.art/r/12",
+        "target_url": "https://wa.me/5551999999999",
+        "platform": "whatsapp",
+        "display_mode": "circular",
+        "icon_variant": "black",
+        "show_icon_background": true,
+        "button_color": "#ACE1AF",
+        "resolved_button_color": "#ACE1AF",
+        "resolved_circular_bg": "#ACE1AF",
+        "order_index": 0,
+        "is_active": true
+      }
+    ],
     "button_links": [],
     "data": {
       "id": 1,
@@ -369,12 +385,40 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
       "publication_status": "published",
       "theme": {},
       "buttons": [],
-      "circular_links": [],
+      "circular_links": [
+        {
+          "id": 12,
+          "title": "WhatsApp",
+          "redirect_url": "https://assin.art/r/12",
+          "target_url": "https://wa.me/5551999999999",
+          "platform": "whatsapp",
+          "display_mode": "circular",
+          "icon_variant": "black",
+          "show_icon_background": true,
+          "button_color": "#ACE1AF",
+          "resolved_button_color": "#ACE1AF",
+          "resolved_circular_bg": "#ACE1AF",
+          "order_index": 0,
+          "is_active": true
+        }
+      ],
       "button_links": []
     }
   }
   ```
 - **Respostas de Erro:** `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o artista não existe ou permanece em rascunho para terceiros.
+
+**Contrato de `circular_links[]`:**
+- Cada item representa um botão com `display_mode` igual a `"circular"` e `is_active` igual a `true`.
+- `button_color`: Cor individual do botão em hexadecimal. Vale `null` quando o artista não define cor individual.
+- `resolved_button_color`: Cor de fundo do botão. Usa `button_color` quando o valor não é `null`. Sem valor, usa `artists.button_color` e, em seguida, `#FFE600`.
+- `resolved_circular_bg`: Cor de fundo do ícone circular. Aplica a precedência abaixo, na ordem:
+  1. Use `button_color` quando contém hexadecimal válido.
+  2. Use `artists.circular_icon_background` quando contém hexadecimal válido.
+  3. Use `icon_variant` do botão: `black` retorna `#FFFFFF`; `white` retorna `#000000`; os demais valores retornam `#FFFFFF`.
+- Hexadecimal válido segue o formato `#RRGGBB` ou `#RGB`. Espaços no início e no fim de `button_color` são removidos antes da validação.
+- Os valores `auto`, `white` e `black` em `artists.circular_icon_background` não são cores. O backend ignora esses valores e aplica o passo 3.
+- O campo `styles` não aparece em `circular_links[]`. Os estilos resolvidos aparecem somente em `button_links[].styles`.
 
 ### 7.2 Redirecionamento e Contagem de Clique (`GET /r/{id}`)
 - **Acesso:** Público.
