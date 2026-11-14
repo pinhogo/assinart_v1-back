@@ -39,19 +39,33 @@ class AuthTest extends TestCase
                 'status',
                 'message',
                 'token',
-                'artist' => ['id', 'name', 'username', 'email'],
+                'artist' => ['id', 'name', 'username', 'email', 'is_published', 'publication_status'],
+                'data' => [
+                    'user' => ['id', 'name', 'username', 'email', 'is_published', 'publication_status'],
+                    'token',
+                ],
             ])
             ->assertJson([
                 'status' => 'success',
                 'artist' => [
                     'username' => 'gabriel_pinho',
                     'email' => 'gabriel@assin.art',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+                'data' => [
+                    'user' => [
+                        'username' => 'gabriel_pinho',
+                        'is_published' => false,
+                        'publication_status' => 'draft',
+                    ],
                 ],
             ]);
 
         $this->assertDatabaseHas('artists', [
             'username' => 'gabriel_pinho',
             'email' => 'gabriel@assin.art',
+            'is_published' => 0,
         ]);
     }
 
@@ -267,6 +281,8 @@ class AuthTest extends TestCase
                     'id' => $artist->id,
                     'username' => 'artista_me',
                     'email' => 'me@assin.art',
+                    'is_published' => true,
+                    'publication_status' => 'published',
                 ],
             ]);
     }

@@ -10,7 +10,7 @@
 
 | Nome | Caminho | Tabela | Finalidade | Relacionamentos / Accessors |
 | :--- | :--- | :--- | :--- | :--- |
-| `Artist` | `app/Models/Artist.php` | `artists` | Representa o artista autenticado, credenciais e configurações visuais | `hasMany(buttons)`, `hasMany(pageViews)`, `avatar`, `cover`, `background` |
+| `Artist` | `app/Models/Artist.php` | `artists` | Representa o artista autenticado, estado de publicação e configurações visuais | `hasMany(buttons)`, `hasMany(pageViews)`, `avatar`, `cover`, `background`, `publication_status` |
 | `Button` | `app/Models/Button.php` | `buttons` | Representa links e botões da página neo-brutalista | `belongsTo(artist)`, `hasMany(buttonClicks)`, styles herdados |
 | `PageView` | `app/Models/PageView.php` | `page_views` | Registra acessos e pageviews do perfil público com telemetria | `belongsTo(artist)` |
 | `ButtonClick` | `app/Models/ButtonClick.php` | `button_clicks` | Registra cliques pontuais para métricas e telemetria | `belongsTo(button)` |
@@ -26,7 +26,7 @@
 | `ButtonController` | `app/Http/Controllers/Api/ButtonController.php` | `GET /buttons`, `POST /buttons`, `PUT /buttons/{id}`, `PATCH /buttons/{id}`, `DELETE /buttons/{id}`, `DELETE /buttons`, `POST /buttons/reorder`, `POST /buttons/{id}/image` | CRUD de botões, reordenação atômica, exclusão em massa e upload de thumbnails |
 | `OnboardingController` | `app/Http/Controllers/Api/OnboardingController.php` | `PUT /onboarding/links`, `PUT /onboarding/background`, `PUT /onboarding/buttons` | Fluxo guiado em 3 etapas para novos artistas |
 | `UsernameController` | `app/Http/Controllers/Api/V1/UsernameController.php` | `GET /usernames/check` | Checagem de disponibilidade e validação de @username em tempo real |
-| `PublicProfileController` | `app/Http/Controllers/PublicProfileController.php` | `GET /{username}` | Perfil público de alta performance com partição de botões e nó `theme` |
+| `PublicProfileController` | `app/Http/Controllers/PublicProfileController.php` | `GET /{username}` | Perfil público com guarda de publicação (`is_published`), pré-visualização do proprietário via Sanctum, partição de botões e nó `theme` |
 | `RedirectController` | `app/Http/Controllers/RedirectController.php` | `GET /r/{id}` | Redirecionamento 302 com incremento de cliques e telemetria analítica |
 | `MetricsController` | `app/Http/Controllers/Api/MetricsController.php` | `POST /track`, `GET /metrics/summary` | Rastreio de pageviews/cliques e sumário analítico com filtros temporais |
 
@@ -57,6 +57,8 @@
 | `0001_01_01_000003_create_personal_access_tokens_table.php` | `personal_access_tokens` | Tokens de autenticação Laravel Sanctum |
 | `2026_11_02_000001_add_typography_and_style_columns.php` | `artists`, `buttons` | Colunas de tipografia, wallpaper e estilos visuais |
 | `2026_11_02_000002_create_page_views_and_button_clicks_tables.php` | `page_views`, `button_clicks` | Tabelas de telemetria analítica e cliques |
+| `2026_11_12_000001_add_text_align_and_update_buttons_defaults.php` | `buttons`, `artists` | Coluna `text_align` e ajuste de padrões visuais |
+| `2026_11_13_000001_add_is_published_to_artists_table.php` | `artists` | Coluna booleana `is_published` para controle de publicação e rascunho |
 
 ---
 
@@ -75,3 +77,4 @@
 | `UsernameCheckTest.php` | `tests/Feature/UsernameCheckTest.php` | Verificação de disponibilidade de @username e rotas reservadas |
 | `CorsSecurityTest.php` | `tests/Feature/CorsSecurityTest.php` | Políticas de CORS e cabeçalhos de segurança |
 | `OnboardingTest.php` | `tests/Feature/OnboardingTest.php` | Fluxo guiado em 3 etapas de cadastro e publicação de perfil |
+| `ProfilePublicationTest.php` | `tests/Feature/ProfilePublicationTest.php` | Estado inicial em rascunho no registro, alternância em `PATCH /profile` e bloqueio de rascunho |

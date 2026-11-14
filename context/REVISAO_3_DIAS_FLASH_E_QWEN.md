@@ -47,3 +47,17 @@
 | 2026-11-02T09:44:09-03:00 | `app/Http/Controllers/Api/Concerns/ManagesProfileMedia.php` | Criado | Antigravity | Trait para gestão e expurgo de mídias de perfil |
 | 2026-11-02T09:44:21-03:00 | `app/Http/Controllers/Api/ProfileController.php` | Refatorado | Antigravity | Otimização para cumprimento estrito do limite de 150 linhas |
 | 2026-11-02T19:25:38-03:00 | `README-local.md` | Criado | Antigravity | Guia de execução local, PHP 8.4 e comandos artisan |
+| 2026-11-13T21:14:20-03:00 | `database/migrations/2026_11_13_000001_add_is_published_to_artists_table.php` | Criado | Antigravity | FIX-API-07: adiciona coluna booleana `is_published` na tabela `artists` |
+| 2026-11-13T21:14:32-03:00 | `app/Models/Artist.php` | Editado | Antigravity | FIX-API-07: adiciona `is_published` em `$fillable`/`casts()` e accessor `publication_status` |
+| 2026-11-13T21:14:33-03:00 | `database/factories/ArtistFactory.php` | Editado | Antigravity | FIX-API-07: define `is_published => true` padrão na factory de artistas |
+| 2026-11-13T21:14:35-03:00 | `app/Http/Controllers/Api/AuthController.php` | Editado | Antigravity | FIX-API-07: inicia novos cadastros com `is_published => false` e expõe status em sessão/user |
+| 2026-11-13T21:14:44-03:00 | `app/Http/Controllers/Api/ProfileController.php` | Editado | Antigravity | FIX-API-07: valida e normaliza `is_published` e `publication_status` no PATCH de perfil |
+| 2026-11-13T21:14:55-03:00 | `app/Http/Controllers/PublicProfileController.php` | Editado | Antigravity | FIX-API-07: retorna 404 para perfis em rascunho e libera pré-visualização 200 ao dono |
+| 2026-11-13T21:15:59-03:00 | `tests/Feature/AuthTest.php` | Editado | Antigravity | FIX-API-07: valida estado inicial `draft` no register e campos de publicação no `/auth/me` |
+| 2026-11-13T21:16:01-03:00 | `tests/Feature/PublicProfileTest.php` | Editado | Antigravity | FIX-API-07: testa bloqueio 404 de rascunho para terceiros e preview 200 do proprietário |
+| 2026-11-13T21:16:03-03:00 | `tests/Feature/ProfilePublicationTest.php` | Criado | Antigravity | FIX-API-07: cobre ciclo completo de publicação/despublicação e validação 422 |
+| 2026-11-13T21:16:31-03:00 | `context/api_contracts.md` | Atualizado | Antigravity | FIX-API-07: documenta `is_published` e `publication_status` em Auth, Profile e Público |
+| 2026-11-13T21:16:45-03:00 | `context/data_dictionary.md` | Atualizado | Antigravity | FIX-API-07: documenta coluna `is_published` na tabela `artists` e diagrama ER |
+| 2026-11-13T21:16:48-03:00 | `docs/DATA_DICTIONARY.md` | Atualizado | Antigravity | FIX-API-07: sincroniza coluna `is_published` no dicionário estendido |
+| 2026-11-13T21:16:54-03:00 | `context/inventory.md` | Atualizado | Antigravity | FIX-API-07: cataloga migration `is_published` e suíte `ProfilePublicationTest.php` |
+| 2026-11-13T21:16:56-03:00 | `context/tasks_backend.md` | Atualizado | Antigravity | FIX-API-07: registra entrega da Fase 7 (persistência de publicação e guarda de rascunho) |

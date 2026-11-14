@@ -76,6 +76,7 @@ erDiagram
         string border_style
         string border_color
         string icon_variant
+        boolean is_published
         timestamp email_verified_at
         string remember_token
         timestamp created_at
@@ -156,6 +157,7 @@ Armazena as credenciais de acesso, dados de perfil e configurações visuais glo
 | `border_style` | `VARCHAR(30)` | Não | `'solid-3px'` | Espessura de borda neo-brutalista. |
 | `border_color` | `VARCHAR(20)` | Não | `'#000000'` | Cor das bordas neo-brutalistas. |
 | `icon_variant` | `VARCHAR(30)` | Não | `'default'` | Variante de ícones sociais. |
+| `is_published` | `BOOLEAN` | Não | `true` | Define visibilidade pública em `GET /{username}` (`true` para contas existentes; `false` no cadastro inicial). |
 | `email_verified_at` | `TIMESTAMP` | Sim | `NULL` | Carimbo de verificação de e-mail. |
 | `remember_token` | `VARCHAR(100)` | Sim | `NULL` | Token de persistência de sessão. |
 | `created_at` / `updated_at` | `TIMESTAMP` | Sim | `CURRENT_TIMESTAMP` | Carimbos de criação e atualização. |

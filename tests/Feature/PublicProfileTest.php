@@ -289,4 +289,87 @@ class PublicProfileTest extends TestCase
         $this->assertEquals('center', $buttons[0]['styles']['text_align']);
         $this->assertFalse($buttons[0]['show_icon_background']);
     }
+
+    /**
+     * FIX-API-07: Perfil não publicado retorna 404 not_found para visitante anônimo.
+     */
+    public function test_unpublished_profile_returns_404_for_anonymous_visitor(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'rascunho_anonimo',
+            'is_published' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/rascunho_anonimo');
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'status' => 'not_found',
+                'message' => 'Artista não encontrado.',
+            ]);
+    }
+
+    /**
+     * FIX-API-07: Perfil não publicado retorna 404 not_found para outro artista autenticado.
+     */
+    public function test_unpublished_profile_returns_404_for_other_authenticated_artist(): void
+    {
+        Artist::factory()->create([
+            'username' => 'rascunho_privado',
+            'is_published' => false,
+        ]);
+
+        $otherArtist = Artist::factory()->create([
+            'username' => 'outro_artista',
+        ]);
+
+        $response = $this->actingAs($otherArtist, 'sanctum')
+            ->getJson('/rascunho_privado');
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'status' => 'not_found',
+                'message' => 'Artista não encontrado.',
+            ]);
+    }
+
+    /**
+     * FIX-API-07: Proprietário autenticado pode pré-visualizar o próprio perfil em rascunho (HTTP 200).
+     */
+    public function test_unpublished_profile_allows_200_preview_for_owner(): void
+    {
+        $owner = Artist::factory()->create([
+            'username' => 'rascunho_dono',
+            'is_published' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $owner->id,
+            'title' => 'Preview Link',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($owner, 'sanctum')
+            ->getJson('/rascunho_dono');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'found',
+                'artist' => [
+                    'username' => 'rascunho_dono',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+                'data' => [
+                    'username' => 'rascunho_dono',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+            ]);
+    }
 }

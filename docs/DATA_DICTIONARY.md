@@ -53,6 +53,7 @@ erDiagram
         string border_style
         string border_color
         enum icon_variant
+        boolean is_published
         timestamp email_verified_at
         string remember_token
         timestamp created_at
@@ -156,6 +157,7 @@ Armazena as credenciais de acesso, dados do perfil público, parâmetros de iden
 | `border_style` | `VARCHAR(30)` | Não | `'solid-3px'` | — | Espessura e traçado das bordas neo-brutalistas (`solid-3px`, `solid-4px`, `none`). | `'solid-3px'` |
 | `border_color` | `VARCHAR(20)` | Não | `'#000000'` | — | Cor hexadecimal das bordas neo-brutalistas dos elementos da página. | `'#000000'` |
 | `icon_variant` | `VARCHAR(30)` | Não | `'default'` | `'default', 'black', 'white', 'none'` | Variante visual padrão dos ícones nos botões. | `'default'` |
+| `is_published` | `BOOLEAN` | Não | `true` | `0 (draft), 1 (published)` | Define se a página pública `/{username}` aceita acesso público (`false` no cadastro; `true` após publicação). | `true` |
 | `email_verified_at` | `TIMESTAMP` | Sim | `NULL` | — | Data e hora de confirmação de titularidade do e-mail. | `2026-10-20 22:30:00` |
 | `remember_token` | `VARCHAR(100)` | Sim | `NULL` | — | Token para persistência de sessão autenticada "Lembrar de mim". | `"tXk9...8zQ"` |
 | `created_at` | `TIMESTAMP` | Sim | `CURRENT_TIMESTAMP` | — | Data e hora de criação do cadastro no sistema. | `2026-10-20 20:00:00` |

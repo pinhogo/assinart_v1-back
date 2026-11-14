@@ -188,3 +188,16 @@
     - [x] Catálogo de todos os 28 endpoints com métodos, headers, payloads e respostas.
     - [x] Dicionário de dados completo (35 colunas) e herança de estilos.
   - **Critério de aceite:** Abre diretamente com 2 cliques em qualquer navegador web.
+
+---
+
+## Fase 7: Manutenção e Evolução de Contratos (`FIX-API-07`)
+
+- [x] **Task 7.1 (`#262` / `FIX-API-07`): Persistência de Publicação (`is_published` / `publication_status`) e Guarda de Rascunho**
+  - **Arquivos:** `database/migrations/2026_11_13_000001_add_is_published_to_artists_table.php`, `app/Models/Artist.php`, `database/factories/ArtistFactory.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/ProfileController.php`, `app/Http/Controllers/PublicProfileController.php`
+  - **Escopo:**
+    - [x] Adicionar coluna booleana `is_published` na tabela `artists` (padrão `true` no schema para contas legadas e `false` no endpoint `POST /api/v1/auth/register`).
+    - [x] Expor `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`) no model `Artist` e nas respostas de `auth/register`, `auth/login`, `auth/me` e `/api/v1/profile`.
+    - [x] Validar e normalizar `is_published` e `publication_status` em `PATCH /api/v1/profile`.
+    - [x] Bloquear `GET /{username}` com HTTP `404 not_found` para terceiros quando `is_published` é `false`, preservando pré-visualização `200 OK` para o proprietário autenticado via Sanctum.
+    - [x] Cobrir o fluxo completo com testes Feature em `tests/Feature/AuthTest.php`, `tests/Feature/PublicProfileTest.php` e `tests/Feature/ProfilePublicationTest.php`.

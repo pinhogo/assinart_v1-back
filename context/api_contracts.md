@@ -56,13 +56,16 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "id": 1,
         "name": "Maria Silva",
         "username": "nomedeusuario",
-        "email": "artista@exemplo.com"
+        "email": "artista@exemplo.com",
+        "is_published": false,
+        "publication_status": "draft"
       },
       "token": "sanctum_token_string"
     }
   }
   ```
 - **Campo `name`:** Nome artístico ou de exibição do artista. Obrigatório no formulário e persistido na tabela `ARTISTS`.
+- **Estado Inicial de Publicação:** Toda nova conta inicia com `is_published: false` e `publication_status: "draft"`. O endpoint ignora flags de publicação enviados pelo cliente no cadastro.
 - **Respostas de Erro:** 422 Unprocessable Entity (username em uso, e-mail duplicado, senha curta ou nome vazio).
 
 ### 2.2 Login de Artista (`POST /api/v1/auth/login`)
@@ -83,7 +86,9 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "id": 1,
         "name": "Nome do Artista",
         "username": "nomedeusuario",
-        "email": "artista@exemplo.com"
+        "email": "artista@exemplo.com",
+        "is_published": true,
+        "publication_status": "published"
       },
       "token": "sanctum_token_string"
     }
@@ -93,7 +98,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 
 ### 2.3 Perfil Autenticado (`GET /api/v1/auth/me`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (200 OK):** Retorna o objeto `user` do artista logado.
+- **Resposta de Sucesso (200 OK):** Retorna o objeto completo do artista em `data`, incluindo `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`).
 - **Respostas de Erro:** 401 Unauthorized (token ausente ou expirado).
 
 ### 2.4 Logout (`POST /api/v1/auth/logout`)
@@ -173,15 +178,18 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
     "button_font_style": "normal",
     "button_text_border": "none",
     "border_style": "solid-3px",
-    "border_color": "#000000"
+    "border_color": "#000000",
+    "icon_variant": "default",
+    "is_published": false,
+    "publication_status": "draft"
   }
   ```
 
 ### 4.2 Atualizar Perfil e Tema (`PATCH /api/v1/profile`)
 - **Acesso:** Bearer Token.
-- **Corpo da Requisição:** Campos opcionais correspondentes aos atributos de perfil, referências polimórficas de mídia (`avatar`, `background`, `cover`) e estilo visual / tipografia.
-- **Resposta de Sucesso (200 OK):** Retorna envelope `{ status: "success", data: ArtistUser }` com o perfil atualizado.
-- **Respostas de Erro:** 422 Unprocessable Entity (username em uso, enum inválido ou palavras reservadas).
+- **Corpo da Requisição:** Campos opcionais de perfil, mídia polimórfica (`avatar`, `background`, `cover`), tema visual/tipográfico e estado de publicação (`is_published`: `boolean`; `publication_status`: `"draft" | "published"`). Quando ambos os campos de publicação aparecem na mesma requisição, `is_published` define o estado persistido.
+- **Resposta de Sucesso (200 OK):** Retorna envelope `{ status: "success", data: ArtistUser }` com o perfil atualizado, incluindo `is_published` e `publication_status`.
+- **Respostas de Erro:** 422 Unprocessable Entity (username em uso, enum inválido, valor booleano inválido em `is_published` ou palavras reservadas).
 
 ---
 
@@ -326,39 +334,47 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 ## 7. Página Pública e Redirecionador (`/{username}` e `/r/{id}`)
 
 ### 7.1 Obter Perfil Público (`GET /{username}`)
-- **Acesso:** Público.
+- **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
+- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
 - **Resposta de Sucesso (200 OK):**
   ```json
   {
-    "name": "Nome do Artista",
-    "username": "nomedeusuario",
-    "bio": "Texto da biografia.",
-    "avatar_url": "https://cdn.assin.art/avatars/1.webp",
-    "cover_url": "https://cdn.assin.art/covers/1.webp",
-    "background_color": "#FFFFFF",
-    "background_id": "clean_grid",
-    "button_shape": "square",
-    "button_shadow": "hard_small",
-    "font_family": "Space Grotesk",
-    "font_color": "#000000",
-    "profile_font_family": "Space Grotesk",
-    "profile_font_size": "md",
-    "profile_text_color": "#000000",
-    "profile_font_weight": "normal",
-    "profile_font_style": "normal",
-    "profile_text_border": "none",
-    "button_font_family": "Space Grotesk",
-    "button_font_size": "md",
-    "button_color": "#FFE600",
-    "button_text_color": "#000000",
-    "button_font_weight": "normal",
-    "button_font_style": "normal",
-    "button_text_border": "none",
+    "status": "found",
+    "artist": {
+      "id": 1,
+      "name": "Nome do Artista",
+      "username": "nomedeusuario",
+      "bio": "Texto da biografia.",
+      "avatar_url": "https://cdn.assin.art/avatars/1.webp",
+      "cover_url": "https://cdn.assin.art/covers/1.webp",
+      "is_published": true,
+      "publication_status": "published",
+      "background_color": "#FFFFFF",
+      "background_id": "clean_grid",
+      "button_shape": "square",
+      "button_shadow": "hard_small",
+      "font_family": "Space Grotesk",
+      "font_color": "#000000"
+    },
     "circular_links": [],
-    "button_links": []
+    "button_links": [],
+    "data": {
+      "id": 1,
+      "name": "Nome do Artista",
+      "username": "nomedeusuario",
+      "bio": "Texto da biografia.",
+      "avatar_url": "https://cdn.assin.art/avatars/1.webp",
+      "cover_url": "https://cdn.assin.art/covers/1.webp",
+      "is_published": true,
+      "publication_status": "published",
+      "theme": {},
+      "buttons": [],
+      "circular_links": [],
+      "button_links": []
+    }
   }
   ```
-- **Respostas de Erro:** 404 Not Found (artista não cadastrado).
+- **Respostas de Erro:** `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o artista não existe ou permanece em rascunho para terceiros.
 
 ### 7.2 Redirecionamento e Contagem de Clique (`GET /r/{id}`)
 - **Acesso:** Público.
@@ -493,6 +509,8 @@ erDiagram
         enum button_text_border
         string border_style
         string border_color
+        string icon_variant
+        boolean is_published
         timestamp email_verified_at
     }
 
