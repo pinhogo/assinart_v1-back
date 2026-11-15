@@ -304,31 +304,60 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
     "text_border": "none"
   }
   ```
-- **Resposta de Sucesso (201 Created):** Retorna o objeto do botão criado.
-- **Respostas de Erro:** 422 Unprocessable Entity (máximo de 10 botões atingido ou URL inválida).
+- **Resposta de Sucesso (201 Created):** Retorna o objeto do botão criado, já posicionado ao final da sua seção (`circular` `0..K-1`, `button` `K..M-1`) com `order_index` normalizado (`0..M-1`).
+- **Respostas de Erro:** 422 Unprocessable Entity (máximo global de `30` botões atingido, máximo de `5` botões circulares atingido ou URL/e-mail inválido).
 
-### 6.3 Atualizar Botão Existente (`PUT /api/v1/buttons/{id}`)
+### 6.3 Atualizar Botão Existente (`PUT / PATCH /api/v1/buttons/{id}`)
 - **Acesso:** Bearer Token.
-- **Corpo da Requisição:** Campos opcionais (`title`, `url`, `is_active`, `display_mode`, `icon_variant`, `show_icon_background`, `button_color`, `text_color`, `font_weight`, `font_style`, `text_border`).
+- **Corpo da Requisição:** Campos opcionais (`title`, `url`, `platform`, `is_active`, `display_mode`, `icon_variant`, `show_icon_background`, `type`, `button_color`, `text_color`, `font_family`, `font_weight`, `font_style`, `text_border`, `text_align`, `image_url`). O campo `order_index` é ignorado e nunca mutado diretamente por este endpoint (utilize `POST /api/v1/buttons/reorder`).
+- **Comportamento:** Ao alterar `display_mode`, valida o teto de `5` botões circulares (HTTP `422` ao promover `button -> circular` acima do limite) e executa atualização + renormalização transacional de `order_index` (`circular` `0..K-1`, `button` `K..M-1`).
 - **Resposta de Sucesso (200 OK):** Retorna o botão atualizado.
 
 ### 6.4 Excluir Botão (`DELETE /api/v1/buttons/{id}`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (204 No Content).**
+- **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Botão removido com sucesso." }`.
 
 ### 6.5 Reordenar Botões (`POST /api/v1/buttons/reorder`)
 - **Acesso:** Bearer Token.
 - **Corpo da Requisição:**
   ```json
   {
-    "ordered_ids": [12, 10, 15]
+    "items": [
+      { "id": 12, "display_mode": "circular" },
+      { "id": 10, "display_mode": "button" },
+      { "id": 15, "display_mode": "button" }
+    ]
   }
   ```
-- **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Ordem atualizada com sucesso." }`.
+- **Regras:**
+  - Suporta troca de seção (`button <-> circular`) em transação atômica, normalizando `circular` em `0..K-1` e `button` em `K..M-1`.
+  - Promoção para `circular` força `show_icon_background: true` e converte `icon_variant: "none"` para `"default"`.
+  - Botões remanescentes não enviados no payload são preservados ao final de suas respectivas seções.
+- **Resposta de Sucesso (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "message": "Ordem dos botões atualizada com sucesso.",
+    "data": {
+      "updated_count": 3,
+      "buttons": []
+    }
+  }
+  ```
+- **Respostas de Erro:**
+  - `422 Unprocessable Entity`: lista vazia, IDs duplicados, `display_mode` inválido ou mais de `5` botões com `display_mode: "circular"`.
+  - `403 Forbidden`: um ou mais IDs não pertencem ao artista autenticado (operação abortada atomicamente).
 
 ### 6.6 Limpar Todos os Botões (`DELETE /api/v1/buttons`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (204 No Content):** Remove todos os links do artista logado.
+- **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Todos os botões foram excluídos com sucesso." }`.
+
+### 6.7 Sincronizar Links no Onboarding (`PUT /api/v1/onboarding/links`)
+- **Acesso:** Bearer Token.
+- **Limites e Normalização:**
+  - Limite global de até `30` links combinados (`links` ou `selectedPlatforms`, retornando `422` se excedido) e `remaining_slots` calculado como `max(0, 30 - total_links)`.
+  - Teto máximo de `5` botões com `display_mode: "circular"` (retorna `422` caso excedido).
+  - Ordena automaticamente os itens antes da gravação transacional colocando `circular` (`0..K-1`) antes de `button` (`K..M-1`), preservando a ordem relativa enviada em cada seção.
 
 ---
 
