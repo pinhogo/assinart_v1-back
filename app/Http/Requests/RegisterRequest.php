@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Rules\ArtistUsername;
+use App\Support\ReservedUsernames;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -11,42 +12,11 @@ use Illuminate\Validation\Rule;
 class RegisterRequest extends FormRequest
 {
     /**
-     * Reserved system usernames kept here until FIX-API-08 centralizes them.
+     * Alias kept for code that reads this constant. The source of truth is ReservedUsernames::SLUGS.
      *
      * @var list<string>
      */
-    public const RESERVED_WORDS = [
-        'admin',
-        'api',
-        'app',
-        'assinart',
-        'auth',
-        'cadastro',
-        'confirmacao-email',
-        'contato',
-        'dashboard',
-        'editor',
-        'email',
-        'entrar',
-        'esqueci-senha',
-        'home',
-        'login',
-        'logout',
-        'null',
-        'perfil',
-        'playground',
-        'privacidade',
-        'r',
-        'register',
-        'root',
-        'sac',
-        'settings',
-        'signin',
-        'signup',
-        'status',
-        'termos',
-        'undefined',
-    ];
+    public const RESERVED_WORDS = ReservedUsernames::SLUGS;
 
     /**
      * Determine if the user is authorized to make this request.

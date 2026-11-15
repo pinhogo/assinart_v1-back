@@ -2,8 +2,8 @@
 
 namespace App\Rules;
 
-use App\Http\Requests\RegisterRequest;
 use App\Models\Artist;
+use App\Support\ReservedUsernames;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
@@ -84,7 +84,7 @@ class ArtistUsername implements ValidationRule
             return;
         }
 
-        if (in_array(strtolower($value), RegisterRequest::RESERVED_WORDS, true)) {
+        if (ReservedUsernames::contains($value)) {
             $fail('Este nome de usuário é reservado pelo sistema.');
             return;
         }

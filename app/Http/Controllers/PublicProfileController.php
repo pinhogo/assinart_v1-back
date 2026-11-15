@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\FormatsPublicProfile;
 use App\Models\Artist;
+use App\Support\ReservedUsernames;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,16 +12,12 @@ class PublicProfileController extends Controller
 {
     use FormatsPublicProfile;
 
-    protected const RESERVED_ROUTES = [
-        'api', 'storage', 'r', 'admin', 'login', 'register', 'dashboard', 'editor', 'up',
-    ];
-
     public function show(Request $request, string $username): JsonResponse
     {
         $cleanUsername = strtolower(trim($username));
         $cleanUsername = ltrim($cleanUsername, '@');
 
-        if ($cleanUsername === '' || in_array($cleanUsername, self::RESERVED_ROUTES, true)) {
+        if ($cleanUsername === '' || ReservedUsernames::contains($cleanUsername)) {
             return $this->notFoundResponse();
         }
 
