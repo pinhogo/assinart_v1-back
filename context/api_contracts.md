@@ -65,6 +65,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
   }
   ```
 - **Campo `name`:** Nome artístico ou de exibição do artista. Obrigatório no formulário e persistido na tabela `ARTISTS`.
+- **Regra de `username` (unificada em registro, `PATCH /api/v1/profile` e `/usernames/check`):** Normalizado antes da validação (`trim`, `strtolower`, remoção de `@` inicial). Aceita `[a-z0-9_.-]` com `2` a `30` caracteres, não pode começar nem terminar com `.`, não pode conter `..`, rejeita palavras reservadas e exige unicidade em minúsculas.
 - **Estado Inicial de Publicação:** Toda nova conta inicia com `is_published: false` e `publication_status: "draft"`. O endpoint ignora flags de publicação enviados pelo cliente no cadastro.
 - **Respostas de Erro:** 422 Unprocessable Entity (username em uso, e-mail duplicado, senha curta ou nome vazio).
 
@@ -187,9 +188,9 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 
 ### 4.2 Atualizar Perfil e Tema (`PATCH /api/v1/profile`)
 - **Acesso:** Bearer Token.
-- **Corpo da Requisição:** Campos opcionais de perfil, mídia polimórfica (`avatar`, `background`, `cover`), tema visual/tipográfico e estado de publicação (`is_published`: `boolean`; `publication_status`: `"draft" | "published"`). Quando ambos os campos de publicação aparecem na mesma requisição, `is_published` define o estado persistido.
+- **Corpo da Requisição:** Campos opcionais de perfil (incluindo `username` sob a mesma normalização e validação do registro: `[a-z0-9_.-]`, 2–30 caracteres, sem `.` inicial/final ou `..`, sem palavras reservadas e único em minúsculas), mídia polimórfica (`avatar`, `background`, `cover`), tema visual/tipográfico e estado de publicação (`is_published`: `boolean`; `publication_status`: `"draft" | "published"`). Quando ambos os campos de publicação aparecem na mesma requisição, `is_published` define o estado persistido.
 - **Resposta de Sucesso (200 OK):** Retorna envelope `{ status: "success", data: ArtistUser }` com o perfil atualizado, incluindo `is_published` e `publication_status`.
-- **Respostas de Erro:** 422 Unprocessable Entity (username em uso, enum inválido, valor booleano inválido em `is_published` ou palavras reservadas).
+- **Respostas de Erro:** 422 Unprocessable Entity (username inválido/em uso/reservado, enum inválido, valor booleano inválido em `is_published` ou palavras reservadas).
 
 ---
 
@@ -335,7 +336,7 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 
 ### 7.1 Obter Perfil Público (`GET /{username}`)
 - **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
-- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
+- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` com `{ "status": "draft", "message": "Perfil ainda não publicado." }` (sem dados do artista) para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
 - **Resposta de Sucesso (200 OK):**
   ```json
   {
@@ -406,7 +407,9 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
     }
   }
   ```
-- **Respostas de Erro:** `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o artista não existe ou permanece em rascunho para terceiros.
+- **Respostas de Erro:**
+  - `404 Not Found` (`{ "status": "not_found", "message": "Artista não encontrado." }`) quando o `@username` não existe ou é rota reservada.
+  - `404 Not Found` (`{ "status": "draft", "message": "Perfil ainda não publicado." }`, sem dados do artista) quando o artista existe com `is_published: false` para visitante anônimo ou outro artista autenticado.
 
 **Contrato de `circular_links[]`:**
 - Cada item representa um botão com `display_mode` igual a `"circular"` e `is_active` igual a `true`.

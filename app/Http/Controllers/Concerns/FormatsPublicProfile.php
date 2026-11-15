@@ -19,6 +19,8 @@ trait FormatsPublicProfile
             'background_id' => $artist->background_id,
             'button_shape' => $artist->button_shape,
             'button_shadow' => $artist->button_shadow,
+            'button_shadow_color' => $artist->button_shadow_color ?? '#000000',
+            'circular_shadow_enabled' => (bool) ($artist->circular_shadow_enabled ?? true),
             'circular_icon_background' => $artist->circular_icon_background,
             'font_family' => $artist->font_family,
             'font_color' => $artist->font_color,
@@ -84,6 +86,9 @@ trait FormatsPublicProfile
                 'resolved_text_color' => $btn->resolved_text_color,
                 'resolved_font_family' => $btn->resolved_font_family,
                 'resolved_shadow' => $btn->resolved_shadow,
+                'font_weight' => $btn->resolved_font_weight,
+                'font_style' => $btn->resolved_font_style,
+                'text_border' => $btn->resolved_text_border,
                 'order_index' => (int) $btn->order_index,
                 'is_active' => (bool) $btn->is_active,
                 'styles' => [

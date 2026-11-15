@@ -433,4 +433,156 @@ class OnboardingTest extends TestCase
 
         $this->assertNull($customBtn->fresh()->button_color);
     }
+
+    /**
+     * FIX-API-09: Etapa 3 persiste button_shadow_color e circular_shadow_enabled (snake_case e camelCase).
+     */
+    public function test_step3_saves_button_shadow_color_and_circular_shadow_enabled(): void
+    {
+        $artist = Artist::factory()->create([
+            'button_shadow_color' => null,
+            'circular_shadow_enabled' => true,
+        ]);
+
+        // 1. Verifica fallbacks quando campos não são enviados
+        $defaultResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+            ]);
+
+        $defaultResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#000000',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($defaultResponse->json('data.circular_shadow_enabled'));
+
+        // 2. Salva snake_case com circular_shadow_enabled = false
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'rounded',
+                'button_shadow' => 'colored',
+                'button_shadow_color' => '#FF3366',
+                'circular_shadow_enabled' => false,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow' => 'colored',
+                    'button_shadow_color' => '#FF3366',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($response->json('data.circular_shadow_enabled'));
+
+        $artist->refresh();
+        $this->assertEquals('#FF3366', $artist->button_shadow_color);
+        $this->assertFalse($artist->circular_shadow_enabled);
+
+        // 3. Aceita camelCase buttonShadowColor / shadowColor e string boolean em circularShadowEnabled
+        $camelResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'pill',
+                'buttonShadowColor' => '#112233',
+                'circularShadowEnabled' => 'true',
+            ]);
+
+        $camelResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#112233',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($camelResponse->json('data.circular_shadow_enabled'));
+
+        $aliasResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'shadowColor' => '#445566',
+                'circularShadowEnabled' => 'false',
+            ]);
+
+        $aliasResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#445566',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($aliasResponse->json('data.circular_shadow_enabled'));
+
+        // 4. Rejeita booleano inválido com 422
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'circular_shadow_enabled' => 'nao-booleano',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['circular_shadow_enabled']);
+    }
+
+    /**
+     * FIX-API-09: PUT /api/v1/profile persiste e GET /api/v1/profile retorna button_shadow_color e circular_shadow_enabled.
+     */
+    public function test_profile_update_and_show_persist_and_return_shadow_color_and_circular_shadow(): void
+    {
+        $artist = Artist::factory()->create([
+            'button_shadow_color' => '#000000',
+            'circular_shadow_enabled' => true,
+        ]);
+
+        $putResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', [
+                'button_shadow_color' => '#E15B3A',
+                'circular_shadow_enabled' => false,
+            ]);
+
+        $putResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($putResponse->json('data.circular_shadow_enabled'));
+
+        $getResponse = $this->actingAs($artist, 'sanctum')
+            ->getJson('/api/v1/profile');
+
+        $getResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($getResponse->json('data.circular_shadow_enabled'));
+
+        // Confirma suporte a camelCase em PUT /api/v1/profile
+        $camelPut = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', [
+                'shadowColor' => '#2F4A3C',
+                'circularShadowEnabled' => '1',
+            ]);
+
+        $camelPut->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#2F4A3C',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($camelPut->json('data.circular_shadow_enabled'));
+    }
 }

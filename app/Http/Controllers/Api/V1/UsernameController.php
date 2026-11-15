@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
+use App\Rules\ArtistUsername;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -64,16 +65,16 @@ class UsernameController extends Controller
         }
 
         // 1. Sanitização: remove espaços e o '@' inicial, convertendo para minúsculas
-        $clean = strtolower(trim($raw));
-        $clean = ltrim($clean, '@');
+        $clean = ArtistUsername::normalize($raw);
 
-        // 2. Validação de tamanho e caracteres (letras, números, '.', '_' e '-')
-        if (!preg_match('/^[a-z0-9_.-]{2,30}$/', $clean)) {
+        // 2. Validação compartilhada de tamanho, caracteres e posição de pontos
+        $formatError = ArtistUsername::formatError($clean);
+        if ($formatError !== null) {
             return response()->json([
                 'username' => $clean,
                 'available' => false,
                 'reason' => 'invalid_format',
-                'message' => 'O @ deve ter entre 2 e 30 caracteres (letras, números, pontos, traços ou sublinhados).',
+                'message' => $formatError,
             ], 200);
         }
 
@@ -87,8 +88,8 @@ class UsernameController extends Controller
             ], 200);
         }
 
-        // 4. Verificação de colisão no banco de dados
-        $exists = Artist::where('username', $clean)->exists();
+        // 4. Verificação de colisão no banco de dados (insensível a maiúsculas)
+        $exists = Artist::whereRaw('LOWER(username) = ?', [$clean])->exists();
 
         if ($exists) {
             return response()->json([

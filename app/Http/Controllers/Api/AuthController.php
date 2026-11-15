@@ -29,6 +29,8 @@ class AuthController extends Controller
             'password' => Hash::make($request->input('password')),
             'background_color' => '#FFFFFF',
             'button_shape' => 'square',
+            'button_shadow_color' => '#000000',
+            'circular_shadow_enabled' => true,
             'avatar_shape' => 'circle',
             'font_family' => 'Space Grotesk',
             'font_color' => '#000000',

@@ -293,7 +293,7 @@ class PublicProfileTest extends TestCase
     }
 
     /**
-     * FIX-API-07: Perfil não publicado retorna 404 not_found para visitante anônimo.
+     * FIX-API-11: Perfil não publicado retorna 404 draft para visitante anônimo.
      */
     public function test_unpublished_profile_returns_404_for_anonymous_visitor(): void
     {
@@ -310,14 +310,14 @@ class PublicProfileTest extends TestCase
         $response = $this->getJson('/rascunho_anonimo');
 
         $response->assertStatus(404)
-            ->assertJson([
-                'status' => 'not_found',
-                'message' => 'Artista não encontrado.',
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
             ]);
     }
 
     /**
-     * FIX-API-07: Perfil não publicado retorna 404 not_found para outro artista autenticado.
+     * FIX-API-11: Perfil não publicado retorna 404 draft para outro artista autenticado.
      */
     public function test_unpublished_profile_returns_404_for_other_authenticated_artist(): void
     {
@@ -334,9 +334,9 @@ class PublicProfileTest extends TestCase
             ->getJson('/rascunho_privado');
 
         $response->assertStatus(404)
-            ->assertJson([
-                'status' => 'not_found',
-                'message' => 'Artista não encontrado.',
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
             ]);
     }
 
@@ -503,5 +503,121 @@ class PublicProfileTest extends TestCase
         $circular = collect($response->json('circular_links'))->firstWhere('id', $button->id);
 
         $this->assertEquals('#123456', $circular['resolved_circular_bg']);
+    }
+
+    /**
+     * FIX-API-09: Perfil público GET /{username} expõe button_shadow_color e circular_shadow_enabled em artist e theme.
+     */
+    public function test_public_profile_exposes_button_shadow_color_and_circular_shadow_enabled(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'sombra_publica',
+            'button_shadow' => 'colored',
+            'button_shadow_color' => '#E15B3A',
+            'circular_shadow_enabled' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'display_mode' => 'button',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/sombra_publica');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'found',
+                'artist' => [
+                    'username' => 'sombra_publica',
+                    'button_shadow' => 'colored',
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+                'data' => [
+                    'theme' => [
+                        'button_shadow' => 'colored',
+                        'button_shadow_color' => '#E15B3A',
+                        'circular_shadow_enabled' => false,
+                    ],
+                ],
+            ]);
+
+        $this->assertFalse($response->json('artist.circular_shadow_enabled'));
+        $this->assertFalse($response->json('data.theme.circular_shadow_enabled'));
+
+        // Fallback padrão quando button_shadow_color é null no banco
+        $fallbackArtist = Artist::factory()->create([
+            'username' => 'sombra_fallback',
+            'button_shadow_color' => null,
+            'circular_shadow_enabled' => true,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $fallbackArtist->id,
+            'display_mode' => 'button',
+            'is_active' => true,
+        ]);
+
+        $fallbackResponse = $this->getJson('/sombra_fallback');
+
+        $fallbackResponse->assertStatus(200)
+            ->assertJson([
+                'artist' => [
+                    'button_shadow_color' => '#000000',
+                    'circular_shadow_enabled' => true,
+                ],
+                'data' => [
+                    'theme' => [
+                        'button_shadow_color' => '#000000',
+                        'circular_shadow_enabled' => true,
+                    ],
+                ],
+            ]);
+        $this->assertTrue($fallbackResponse->json('artist.circular_shadow_enabled'));
+        $this->assertTrue($fallbackResponse->json('data.theme.circular_shadow_enabled'));
+    }
+
+    /**
+     * FIX-API-09: Botões regulares em GET /{username} expõem font_weight, font_style e text_border resolvidos.
+     */
+    public function test_public_profile_regular_buttons_expose_font_weight_font_style_and_text_border(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'tipografia_botoes',
+            'button_font_weight' => 'normal',
+            'button_font_style' => 'normal',
+            'button_text_border' => 'none',
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Estilizado',
+            'display_mode' => 'button',
+            'font_weight' => 'bold',
+            'font_style' => 'italic',
+            'text_border' => 'yellow',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/tipografia_botoes');
+
+        $response->assertStatus(200);
+
+        $buttonLinks = $response->json('button_links');
+        $this->assertCount(1, $buttonLinks);
+        $this->assertEquals('bold', $buttonLinks[0]['font_weight']);
+        $this->assertEquals('italic', $buttonLinks[0]['font_style']);
+        $this->assertEquals('yellow', $buttonLinks[0]['text_border']);
+        $this->assertEquals('bold', $buttonLinks[0]['styles']['font_weight']);
+        $this->assertEquals('italic', $buttonLinks[0]['styles']['font_style']);
+        $this->assertEquals('yellow', $buttonLinks[0]['styles']['text_border']);
+
+        $dataButtons = $response->json('data.buttons');
+        $this->assertCount(1, $dataButtons);
+        $this->assertEquals('bold', $dataButtons[0]['font_weight']);
+        $this->assertEquals('italic', $dataButtons[0]['font_style']);
+        $this->assertEquals('yellow', $dataButtons[0]['text_border']);
     }
 }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ManagesProfileMedia;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateProfileRequest;
+use App\Models\Artist;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,75 +15,16 @@ class ProfileController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['status' => 'success', 'data' => $request->user()], 200);
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->serializeArtist($request->user()),
+        ], 200);
     }
 
-    public function update(Request $request): JsonResponse
+    public function update(UpdateProfileRequest $request): JsonResponse
     {
         $artist = $request->user();
-        $mediaUrlRule = function (string $attribute, mixed $value, \Closure $fail): void {
-            if ($value === null || $value === '') {
-                return;
-            }
-            if (!is_string($value)) {
-                $fail("O campo {$attribute} deve ser uma URL válida.");
-                return;
-            }
-            $trimmed = trim($value);
-            if (preg_match('/[\x00-\x1F\x7F]/', $trimmed)) {
-                $fail("O campo {$attribute} contém caracteres inválidos.");
-                return;
-            }
-            if (preg_match('#^https?://#i', $trimmed) || str_starts_with($trimmed, '/storage/')) {
-                return;
-            }
-            if (preg_match('#^data:image/(svg\+xml|png|jpeg|jpg|webp)(;(?:charset=[^;,]+|utf8))?(;base64)?,#i', $trimmed)) {
-                $decoded = rawurldecode($trimmed);
-                if (preg_match('#(<script|javascript:|vbscript:|\bon[a-z]+\s*=)#i', $decoded)) {
-                    $fail("O campo {$attribute} contém conteúdo SVG/data inseguro.");
-                }
-                return;
-            }
-            $fail("O campo {$attribute} deve usar http(s), /storage/ ou imagem data:image válida.");
-        };
-
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:100',
-            'username' => 'sometimes|required|string|max:50|unique:artists,username,' . $artist->id,
-            'bio' => 'nullable|string|max:500',
-            'avatar_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
-            'cover_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
-            'background_color' => 'nullable|string|max:20',
-            'background_id' => 'nullable|string|max:50',
-            'wallpaper_url' => 'nullable|string|max:2048',
-            'wallpaper_repeat' => 'nullable|boolean',
-            'wallpaper_preset_id' => 'nullable|string|max:50',
-            'cover_color' => 'nullable|string|max:20',
-            'button_shape' => 'nullable|in:square,rounded,pill',
-            'button_shadow' => 'nullable|string|max:30',
-            'circular_icon_background' => 'nullable|string|max:20',
-            'avatar_shape' => 'nullable|in:circle,square,rounded',
-            'font_family' => 'nullable|string|max:50',
-            'font_color' => 'nullable|string|max:20',
-            'profile_font_family' => 'nullable|string|max:50',
-            'profile_font_size' => 'nullable|in:sm,md,lg',
-            'profile_text_color' => 'nullable|string|max:20',
-            'profile_font_weight' => 'nullable|in:normal,bold',
-            'profile_font_style' => 'nullable|in:normal,italic',
-            'profile_text_border' => 'nullable|in:none,black,white,yellow',
-            'button_font_family' => 'nullable|string|max:50',
-            'button_font_size' => 'nullable|in:sm,md,lg',
-            'button_color' => 'nullable|string|max:20',
-            'button_text_color' => 'nullable|string|max:20',
-            'button_font_weight' => 'nullable|in:normal,bold',
-            'button_font_style' => 'nullable|in:normal,italic',
-            'button_text_border' => 'nullable|in:none,black,white,yellow',
-            'border_style' => 'nullable|string|max:30',
-            'border_color' => 'nullable|string|max:20',
-            'icon_variant' => 'nullable|string|max:30',
-            'is_published' => 'sometimes|boolean',
-            'publication_status' => 'sometimes|in:draft,published',
-        ]);
+        $validated = $request->validated();
 
         if ($request->has('avatar') && is_string($request->input('avatar')) && str_starts_with($request->input('avatar'), 'preset:') && !$request->has('avatar_url')) {
             $validated['avatar_url'] = null;
@@ -125,12 +68,28 @@ class ProfileController extends Controller
             $validated['is_published'] = (bool) $validated['is_published'];
         }
 
+        if (array_key_exists('circular_shadow_enabled', $validated)) {
+            if ($validated['circular_shadow_enabled'] === null) {
+                unset($validated['circular_shadow_enabled']);
+            } else {
+                $validated['circular_shadow_enabled'] = (bool) $validated['circular_shadow_enabled'];
+            }
+        }
+
         $artist->update($validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Perfil atualizado com sucesso.',
-            'data' => $artist->fresh(),
+            'data' => $this->serializeArtist($artist->fresh()),
         ], 200);
+    }
+
+    private function serializeArtist(Artist $artist): array
+    {
+        return array_merge($artist->toArray(), [
+            'button_shadow_color' => $artist->button_shadow_color ?? '#000000',
+            'circular_shadow_enabled' => (bool) ($artist->circular_shadow_enabled ?? true),
+        ]);
     }
 }

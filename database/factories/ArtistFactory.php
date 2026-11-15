@@ -38,6 +38,8 @@ class ArtistFactory extends Factory
             'background_id' => fake()->randomElement([null, 'dots-grid', 'stripes', 'geometric']),
             'button_shape' => fake()->randomElement(['square', 'rounded', 'pill']),
             'button_shadow' => fake()->randomElement(['none', 'hard_small', 'hard_large', 'soft']),
+            'button_shadow_color' => '#000000',
+            'circular_shadow_enabled' => true,
             'circular_icon_background' => 'auto',
             'avatar_shape' => fake()->randomElement(['circle', 'square', 'rounded']),
             'font_family' => 'Space Grotesk',

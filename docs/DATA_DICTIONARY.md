@@ -123,7 +123,7 @@ Armazena as credenciais de acesso, dados do perfil público, parâmetros de iden
 |---|---|:---:|---|---|---|---|
 | `id` | `BIGINT UNSIGNED` | Não | *Auto Increment* | `PRIMARY KEY` | Identificador único e imutável do artista no sistema. | `1` |
 | `name` | `VARCHAR(100)` | Não | — | — | Nome real ou artístico exibido em destaque no topo do perfil. | `"Gabriel Pinho"` |
-| `username` | `VARCHAR(50)` | Não | — | `UNIQUE`, `INDEX` | Identificador público na URL (`assin.art/{username}`). Permite alteração no painel. | `"pinhogo"` |
+| `username` | `VARCHAR(50)` | Não | — | `UNIQUE`, `INDEX` | Identificador público na URL (`assin.art/{username}`). Normalizado em minúsculas sem `@` (`[a-z0-9_.-]`, 2–30 chars, sem `.` nas pontas ou `..`). | `"pinhogo"` |
 | `email` | `VARCHAR(255)` | Não | — | `UNIQUE`, `INDEX` | E-mail corporativo/pessoal para login e recuperação de senha. | `"gabriel@assin.art"` |
 | `password` | `VARCHAR(255)` | Não | — | — | Hash da senha de acesso (Bcrypt / Argon2id). | `"$2y$12$..."` |
 | `bio` | `VARCHAR(500)` | Sim | `NULL` | — | Pequena biografia ou descrição artística abaixo do avatar. | `"Designer e ilustrador neo-brutalista em SP."` |
