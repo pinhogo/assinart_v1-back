@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\OnboardingBackgroundRequest;
 use App\Http\Requests\OnboardingButtonsRequest;
 use App\Http\Requests\OnboardingLinksRequest;
+use App\Services\ButtonOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -59,20 +60,14 @@ class OnboardingController extends Controller
     ];
 
     /**
-     * Etapa 1: Salva a bio e sincroniza até 10 links combinados entre redes sociais e personalizados.
+     * Etapa 1: Salva a bio e sincroniza até 30 links combinados entre redes sociais e personalizados.
      * Endpoint: PUT /api/v1/onboarding/links
      */
-    public function saveLinks(OnboardingLinksRequest $request): JsonResponse
+    public function saveLinks(OnboardingLinksRequest $request, ButtonOrderService $orderService): JsonResponse
     {
         $artist = $request->user();
 
-        // 1. Atualiza a bio se presente no payload
-        if ($request->has('bio')) {
-            $artist->bio = $request->input('bio');
-            $artist->save();
-        }
-
-        // 2. Extrai e normaliza a lista de links (suporta payload padrão e formato draft do frontend)
+        // 1. Extrai e normaliza a lista de links (suporta payload padrão e formato draft do frontend)
         $rawLinks = $request->input('links');
 
         if ($rawLinks === null && ($request->has('selectedPlatforms') || $request->has('linkValues'))) {
@@ -93,12 +88,13 @@ class OnboardingController extends Controller
 
         $rawLinks = is_array($rawLinks) ? $rawLinks : [];
 
-        // 3. Processa até 10 links válidos
+        // 2. Processa até 30 links válidos
         $parsedButtons = [];
         $count = 0;
+        $circularCount = 0;
 
         foreach ($rawLinks as $item) {
-            if ($count >= 10) {
+            if ($count >= ButtonOrderService::MAX_BUTTONS_PER_ARTIST) {
                 break;
             }
 
@@ -134,29 +130,27 @@ class OnboardingController extends Controller
                 ? (bool) $item['show_icon_background']
                 : ($displayMode === 'circular');
 
-            // Regra: modo circular exige ícone e fundo travado
-            if ($displayMode === 'circular') {
-                $showBackground = true;
-                if ($iconVariant === 'none') {
-                    $iconVariant = 'default';
-                }
+            $normalizedDisplay = $orderService->normalizeDisplayAttributes(
+                $displayMode,
+                $iconVariant,
+                $showBackground,
+            );
+
+            if ($normalizedDisplay['display_mode'] === 'circular') {
+                $circularCount++;
             }
 
             $textAlign = (isset($item['text_align']) && in_array($item['text_align'], ['left', 'center', 'right'], true))
                 ? $item['text_align']
                 : 'left';
 
-            $orderIndex = (isset($item['order_index']) && is_numeric($item['order_index']))
-                ? max(0, (int) $item['order_index'])
-                : $count;
-
             $parsedButtons[] = [
                 'title' => $title,
                 'url' => $formattedUrl,
                 'platform' => $platform,
-                'display_mode' => $displayMode,
-                'icon_variant' => $iconVariant,
-                'show_icon_background' => $showBackground,
+                'display_mode' => $normalizedDisplay['display_mode'],
+                'icon_variant' => $normalizedDisplay['icon_variant'],
+                'show_icon_background' => $normalizedDisplay['show_icon_background'],
                 'text_align' => $textAlign,
                 'button_color' => isset($item['button_color']) && trim((string) $item['button_color']) !== '' ? trim((string) $item['button_color']) : null,
                 'text_color' => isset($item['text_color']) && trim((string) $item['text_color']) !== '' ? trim((string) $item['text_color']) : null,
@@ -165,7 +159,7 @@ class OnboardingController extends Controller
                 'font_style' => (isset($item['font_style']) && in_array($item['font_style'], ['normal', 'italic'], true)) ? $item['font_style'] : null,
                 'text_border' => (isset($item['text_border']) && in_array($item['text_border'], ['none', 'black', 'white', 'yellow'], true)) ? $item['text_border'] : null,
                 'type' => 'standard',
-                'order_index' => $orderIndex,
+                'order_index' => $count,
                 'clicks_count' => 0,
                 'is_active' => $isActive,
             ];
@@ -173,8 +167,25 @@ class OnboardingController extends Controller
             $count++;
         }
 
-        // 4. Sincroniza atomicamente no banco de dados
-        $createdButtons = DB::transaction(function () use ($artist, $parsedButtons) {
+        if ($circularCount > ButtonOrderService::MAX_CIRCULAR_BUTTONS) {
+            return response()->json([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+                'errors' => [
+                    'links' => ['Você pode ter no máximo 5 botões circulares.'],
+                ],
+            ], 422);
+        }
+
+        // 3. Normaliza sequência: circular (0..K-1) seguido de button (K..M-1) preservando ordem relativa
+        $parsedButtons = $orderService->sortAndIndexParsedButtons($parsedButtons);
+
+        // 4. Sincroniza bio e botões atomicamente no banco de dados
+        $createdButtons = DB::transaction(function () use ($artist, $request, $parsedButtons) {
+            if ($request->has('bio')) {
+                $artist->bio = $request->input('bio');
+                $artist->save();
+            }
+
             $artist->buttons()->delete();
 
             $results = [];
@@ -193,7 +204,7 @@ class OnboardingController extends Controller
             'data' => [
                 'bio' => $artist->fresh()->bio,
                 'total_links' => $totalLinks,
-                'remaining_slots' => max(0, 10 - $totalLinks),
+                'remaining_slots' => max(0, ButtonOrderService::MAX_BUTTONS_PER_ARTIST - $totalLinks),
                 'links' => $createdButtons,
                 'buttons' => $createdButtons,
             ],

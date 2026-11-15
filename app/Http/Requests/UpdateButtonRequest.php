@@ -30,7 +30,6 @@ class UpdateButtonRequest extends FormRequest
             'text_border' => ['nullable', 'string', 'in:none,black,white,yellow'],
             'text_align' => ['nullable', 'string', 'in:left,center,right'],
             'image_url' => ['nullable', 'string', 'max:2048'],
-            'order_index' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
