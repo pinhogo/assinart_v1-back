@@ -598,27 +598,262 @@ class ButtonTest extends TestCase
     }
 
     /**
-     * Tier 2 (Especificação backend.md): Criação de botão bloqueia ao atingir teto de 10 botões (422).
+     * Tier 2 (API-11): Criação de botão permite até 30 links e bloqueia o 31º com HTTP 422.
      */
-    public function test_store_button_enforces_maximum_of_10_buttons(): void
+    public function test_store_button_enforces_maximum_of_30_buttons(): void
     {
         $artist = Artist::factory()->create();
 
-        // Cria 10 botões
-        Button::factory()->count(10)->create([
-            'artist_id' => $artist->id,
-        ]);
+        for ($i = 1; $i <= 30; $i++) {
+            $this->actingAs($artist, 'sanctum')
+                ->postJson('/api/v1/buttons', [
+                    'title' => "Botão {$i}",
+                    'url' => "https://example.com/link-{$i}",
+                ])
+                ->assertStatus(201);
+        }
+
+        $this->assertEquals(30, $artist->buttons()->count());
 
         $response = $this->actingAs($artist, 'sanctum')
             ->postJson('/api/v1/buttons', [
-                'title' => '11º Botão Proibido',
+                'title' => '31º Botão Proibido',
                 'url' => 'https://example.com/extra',
             ]);
 
         $response->assertStatus(422)
             ->assertJson([
-                'message' => 'Limite de 10 links atingido.',
+                'message' => 'Limite de 30 links atingido.',
+                'errors' => [
+                    'links' => ['Você pode cadastrar no máximo 30 links combinados entre redes sociais e personalizados.'],
+                ],
             ]);
+
+        $this->assertEquals(30, $artist->buttons()->count());
+    }
+
+    /**
+     * Tier 1 (API-11): Novo botão circular é inserido ao final da seção circular mantendo sequência 0..M-1.
+     */
+    public function test_store_button_normalizes_section_order_when_adding_circular(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $c1 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 0,
+            'display_mode' => 'circular',
+            'show_icon_background' => true,
+        ]);
+        $b1 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 1,
+            'display_mode' => 'button',
+        ]);
+        $b2 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 2,
+            'display_mode' => 'button',
+        ]);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => 'Spotify Circular',
+                'url' => 'https://open.spotify.com/artist/pinho',
+                'platform' => 'spotify',
+                'display_mode' => 'circular',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'display_mode' => 'circular',
+                    'order_index' => 1,
+                    'show_icon_background' => true,
+                ],
+            ]);
+
+        $this->assertSame(0, $c1->fresh()->order_index);
+        $this->assertSame(1, $response->json('data.order_index'));
+        $this->assertSame(2, $b1->fresh()->order_index);
+        $this->assertSame(3, $b2->fresh()->order_index);
+    }
+
+    /**
+     * Tier 2 (API-11): Criação via POST /buttons bloqueia o 6º botão circular com HTTP 422.
+     */
+    public function test_store_button_enforces_maximum_of_5_circular_buttons(): void
+    {
+        $artist = Artist::factory()->create();
+
+        for ($i = 0; $i < 5; $i++) {
+            Button::factory()->create([
+                'artist_id' => $artist->id,
+                'order_index' => $i,
+                'display_mode' => 'circular',
+                'show_icon_background' => true,
+            ]);
+        }
+
+        $circularResponse = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => '6º Circular Proibido',
+                'url' => 'https://instagram.com/pinho',
+                'platform' => 'instagram',
+                'display_mode' => 'circular',
+            ]);
+
+        $circularResponse->assertStatus(422)
+            ->assertJson([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+            ]);
+
+        $this->assertEquals(5, $artist->buttons()->where('display_mode', 'circular')->count());
+
+        // Criar um botão padrão continua permitido (até 30 no total)
+        $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => 'Botão Padrão Permitido',
+                'url' => 'https://example.com/padrao',
+                'display_mode' => 'button',
+            ])
+            ->assertStatus(201);
+    }
+
+    /**
+     * Tier 2 (API-11): Promoção para circular via PATCH /buttons/{id} bloqueia o 6º circular com HTTP 422.
+     */
+    public function test_update_button_enforces_maximum_of_5_circular_buttons(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $firstCircular = null;
+        for ($i = 0; $i < 5; $i++) {
+            $created = Button::factory()->create([
+                'artist_id' => $artist->id,
+                'order_index' => $i,
+                'display_mode' => 'circular',
+                'show_icon_background' => true,
+            ]);
+            $firstCircular ??= $created;
+        }
+
+        $regularButton = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 5,
+            'display_mode' => 'button',
+        ]);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$regularButton->id}", [
+                'display_mode' => 'circular',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+            ]);
+
+        $this->assertSame('button', $regularButton->fresh()->display_mode);
+
+        // Atualizar metadados de um circular existente continua permitido mesmo com 5 circulares
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$firstCircular->id}", [
+                'title' => 'Circular Atualizado',
+                'display_mode' => 'circular',
+            ])
+            ->assertStatus(200)
+            ->assertJson([
+                'data' => [
+                    'title' => 'Circular Atualizado',
+                    'display_mode' => 'circular',
+                ],
+            ]);
+    }
+
+    /**
+     * Tier 1 & 2 (API-11): PATCH /buttons/{id} ignora order_index enviado e renormaliza sequência ao trocar display_mode.
+     */
+    public function test_update_button_ignores_order_index_and_renormalizes_on_display_mode_change(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $c1 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 0,
+            'display_mode' => 'circular',
+            'show_icon_background' => true,
+        ]);
+        $b1 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 1,
+            'display_mode' => 'button',
+            'icon_variant' => 'default',
+            'show_icon_background' => false,
+        ]);
+        $b2 = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 2,
+            'display_mode' => 'button',
+            'icon_variant' => 'none',
+            'show_icon_background' => false,
+        ]);
+
+        // 1. Envia order_index bruto no PATCH — deve ser ignorado sem mutar a ordem
+        $patchIgnoreOrder = $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$b2->id}", [
+                'title' => 'Título Sem Mover Ordem',
+                'order_index' => 99,
+            ]);
+
+        $patchIgnoreOrder->assertStatus(200)
+            ->assertJson([
+                'data' => [
+                    'title' => 'Título Sem Mover Ordem',
+                    'order_index' => 2,
+                ],
+            ]);
+        $this->assertSame(2, $b2->fresh()->order_index);
+
+        // 2. Promove b2 (button -> circular): deve ir para circular (0..K-1) e b1 para button (K..M-1)
+        $promoteResponse = $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$b2->id}", [
+                'display_mode' => 'circular',
+                'order_index' => 99,
+            ]);
+
+        $promoteResponse->assertStatus(200)
+            ->assertJson([
+                'data' => [
+                    'display_mode' => 'circular',
+                    'icon_variant' => 'default',
+                    'show_icon_background' => true,
+                    'order_index' => 1,
+                ],
+            ]);
+
+        $this->assertSame(0, $c1->fresh()->order_index);
+        $this->assertSame(1, $b2->fresh()->order_index);
+        $this->assertSame(2, $b1->fresh()->order_index);
+
+        // 3. Rebaixa c1 (circular -> button): b2 assume 0, c1 e b1 ficam em button (1, 2)
+        $demoteResponse = $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$c1->id}", [
+                'display_mode' => 'button',
+            ]);
+
+        $demoteResponse->assertStatus(200)
+            ->assertJson([
+                'data' => [
+                    'display_mode' => 'button',
+                    'order_index' => 1,
+                ],
+            ]);
+
+        $this->assertSame(0, $b2->fresh()->order_index);
+        $this->assertSame(1, $c1->fresh()->order_index);
+        $this->assertSame(2, $b1->fresh()->order_index);
     }
 
     /**

@@ -83,34 +83,138 @@ class OnboardingTest extends TestCase
     }
 
     /**
-     * Tier 2: Etapa 1 rejeita mais de 10 links combinados (422).
+     * Tier 1 & 2 (API-11): Etapa 1 aceita até 30 links combinados (remaining_slots=0) e rejeita 31 links (422).
      */
-    public function test_step1_rejects_more_than_10_links(): void
+    public function test_step1_allows_30_links_and_rejects_more_than_30_links(): void
     {
         $artist = Artist::factory()->create();
 
-        $payload = [
-            'bio' => 'Bio válida',
-            'links' => [
-                ['platform' => 'instagram', 'url' => 'user1'],
-                ['platform' => 'youtube', 'url' => 'user2'],
-                ['platform' => 'x', 'url' => 'user3'],
-                ['platform' => 'spotify', 'url' => 'user4'],
-                ['platform' => 'behance', 'url' => 'user5'],
-                ['platform' => 'tiktok', 'url' => 'user6'],
-                ['platform' => 'pinterest', 'url' => 'user7'],
-                ['platform' => 'discord', 'url' => 'user8'],
-                ['platform' => 'twitch', 'url' => 'user9'],
-                ['platform' => 'telegram', 'url' => 'user10'],
-                ['platform' => 'whatsapp', 'url' => 'user11'],
-            ],
+        $thirtyLinks = [];
+        for ($i = 1; $i <= 30; $i++) {
+            $thirtyLinks[] = [
+                'platform' => 'website',
+                'url' => "https://example.com/site-{$i}",
+                'title' => "Site {$i}",
+            ];
+        }
+
+        $okResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio válida com 30 links',
+                'links' => $thirtyLinks,
+            ]);
+
+        $okResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total_links' => 30,
+                    'remaining_slots' => 0,
+                ],
+            ]);
+        $this->assertEquals(30, $artist->buttons()->count());
+
+        $thirtyOneLinks = $thirtyLinks;
+        $thirtyOneLinks[] = [
+            'platform' => 'custom',
+            'url' => 'https://example.com/extra-31',
+            'title' => 'Extra 31',
+        ];
+
+        $failResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio válida',
+                'links' => $thirtyOneLinks,
+            ]);
+
+        $failResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['links']);
+
+        $draftFailResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'selectedPlatforms' => array_fill(0, 31, 'instagram'),
+            ]);
+
+        $draftFailResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['selectedPlatforms']);
+    }
+
+    /**
+     * Tier 2 (API-11): Etapa 1 rejeita mais de 5 links circulares (422).
+     */
+    public function test_step1_rejects_more_than_5_circular_links(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $links = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $links[] = [
+                'platform' => 'instagram',
+                'url' => "user_{$i}",
+                'display_mode' => 'circular',
+            ];
+        }
+        $links[] = [
+            'platform' => 'website',
+            'url' => 'https://assin.art',
+            'display_mode' => 'button',
         ];
 
         $response = $this->actingAs($artist, 'sanctum')
-            ->putJson('/api/v1/onboarding/links', $payload);
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio com excesso de circulares',
+                'links' => $links,
+            ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['links']);
+            ->assertJsonValidationErrors(['links'])
+            ->assertJson([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+            ]);
+    }
+
+    /**
+     * Tier 1 (API-11): Etapa 1 normaliza order_index colocando circular (0..K-1) antes de button (K..M-1)
+     * preservando a ordem relativa enviada em cada seção.
+     */
+    public function test_step1_normalizes_circular_before_button_preserving_relative_order(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio normalizada',
+                'links' => [
+                    ['platform' => 'instagram', 'url' => 'insta_1', 'display_mode' => 'button'],
+                    ['platform' => 'spotify', 'url' => 'spot_1', 'display_mode' => 'circular'],
+                    ['platform' => 'youtube', 'url' => 'yt_2', 'display_mode' => 'button'],
+                    ['platform' => 'tiktok', 'url' => 'tik_2', 'display_mode' => 'circular'],
+                    ['platform' => 'website', 'url' => 'https://site3.art', 'display_mode' => 'button'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total_links' => 5,
+                    'remaining_slots' => 25,
+                ],
+            ]);
+
+        $orderedPlatforms = $artist->buttons()
+            ->orderBy('order_index', 'asc')
+            ->pluck('platform')
+            ->all();
+
+        $this->assertSame(['spotify', 'tiktok', 'instagram', 'youtube', 'website'], $orderedPlatforms);
+
+        $orderedIndexes = $artist->buttons()
+            ->orderBy('order_index', 'asc')
+            ->pluck('order_index')
+            ->all();
+
+        $this->assertSame([0, 1, 2, 3, 4], $orderedIndexes);
     }
 
     /**
