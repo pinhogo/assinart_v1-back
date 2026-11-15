@@ -201,6 +201,7 @@ class PublicProfileTest extends TestCase
             'platform' => 'instagram',
             'display_mode' => 'circular',
             'icon_variant' => 'black',
+            'button_color' => null,
             'is_active' => true,
             'order_index' => 0,
         ]);
@@ -210,6 +211,7 @@ class PublicProfileTest extends TestCase
             'platform' => 'spotify',
             'display_mode' => 'circular',
             'icon_variant' => 'white',
+            'button_color' => null,
             'is_active' => true,
             'order_index' => 1,
         ]);
@@ -259,5 +261,363 @@ class PublicProfileTest extends TestCase
         $this->assertEquals('#FFFFFF', $circular[0]['resolved_circular_bg']);
         // icon_variant 'white' -> fundo auto '#000000'
         $this->assertEquals('#000000', $circular[1]['resolved_circular_bg']);
+    }
+
+    /**
+     * FIX-API-05: Endpoint público GET /{username} expõe text_align e show_icon_background reais dos botões.
+     */
+    public function test_public_profile_exposes_text_align_and_show_icon_background(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'alinhamento_art',
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Centralizado',
+            'display_mode' => 'button',
+            'show_icon_background' => false,
+            'text_align' => 'center',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/alinhamento_art');
+
+        $response->assertStatus(200);
+        $buttons = $response->json('button_links');
+        $this->assertCount(1, $buttons);
+        $this->assertEquals('center', $buttons[0]['text_align']);
+        $this->assertEquals('center', $buttons[0]['styles']['text_align']);
+        $this->assertFalse($buttons[0]['show_icon_background']);
+    }
+
+    /**
+     * FIX-API-11: Perfil não publicado retorna 404 draft para visitante anônimo.
+     */
+    public function test_unpublished_profile_returns_404_for_anonymous_visitor(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'rascunho_anonimo',
+            'is_published' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/rascunho_anonimo');
+
+        $response->assertStatus(404)
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
+            ]);
+    }
+
+    /**
+     * FIX-API-11: Perfil não publicado retorna 404 draft para outro artista autenticado.
+     */
+    public function test_unpublished_profile_returns_404_for_other_authenticated_artist(): void
+    {
+        Artist::factory()->create([
+            'username' => 'rascunho_privado',
+            'is_published' => false,
+        ]);
+
+        $otherArtist = Artist::factory()->create([
+            'username' => 'outro_artista',
+        ]);
+
+        $response = $this->actingAs($otherArtist, 'sanctum')
+            ->getJson('/rascunho_privado');
+
+        $response->assertStatus(404)
+            ->assertExactJson([
+                'status' => 'draft',
+                'message' => 'Perfil ainda não publicado.',
+            ]);
+    }
+
+    /**
+     * FIX-API-07: Proprietário autenticado pode pré-visualizar o próprio perfil em rascunho (HTTP 200).
+     */
+    public function test_unpublished_profile_allows_200_preview_for_owner(): void
+    {
+        $owner = Artist::factory()->create([
+            'username' => 'rascunho_dono',
+            'is_published' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $owner->id,
+            'title' => 'Preview Link',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($owner, 'sanctum')
+            ->getJson('/rascunho_dono');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'found',
+                'artist' => [
+                    'username' => 'rascunho_dono',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+                'data' => [
+                    'username' => 'rascunho_dono',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+            ]);
+    }
+
+    /**
+     * FIX-API-06: Botão circular com button_color hexadecimal válido prevalece sobre circular_icon_background 'auto'.
+     */
+    public function test_circular_link_with_individual_button_color_overrides_auto_background(): void
+    {
+        // icon_variant => fundo esperado para o botão irmão com button_color null (fallback 'auto')
+        $variantFallbacks = [
+            'black' => '#FFFFFF',
+            'white' => '#000000',
+            'default' => '#FFFFFF',
+        ];
+
+        foreach ($variantFallbacks as $iconVariant => $autoFallback) {
+            $artist = Artist::factory()->create([
+                'username' => 'circ_cor_' . $iconVariant,
+                'circular_icon_background' => 'auto',
+                'button_color' => '#FFE600',
+            ]);
+
+            $withColor = Button::factory()->create([
+                'artist_id' => $artist->id,
+                'title' => 'WhatsApp',
+                'platform' => 'whatsapp',
+                'display_mode' => 'circular',
+                'icon_variant' => $iconVariant,
+                'button_color' => '#ACE1AF',
+                'is_active' => true,
+                'order_index' => 0,
+            ]);
+
+            $withoutColor = Button::factory()->create([
+                'artist_id' => $artist->id,
+                'title' => 'Instagram',
+                'platform' => 'instagram',
+                'display_mode' => 'circular',
+                'icon_variant' => $iconVariant,
+                'button_color' => null,
+                'is_active' => true,
+                'order_index' => 1,
+            ]);
+
+            $response = $this->getJson('/circ_cor_' . $iconVariant);
+
+            $response->assertStatus(200);
+            $circular = collect($response->json('circular_links'));
+
+            $colored = $circular->firstWhere('id', $withColor->id);
+            $this->assertEquals('#ACE1AF', $colored['button_color']);
+            $this->assertEquals('#ACE1AF', $colored['resolved_button_color']);
+            $this->assertEquals('#ACE1AF', $colored['resolved_circular_bg']);
+
+            $fallback = $circular->firstWhere('id', $withoutColor->id);
+            $this->assertNull($fallback['button_color']);
+            $this->assertEquals('#FFE600', $fallback['resolved_button_color']);
+            $this->assertEquals($autoFallback, $fallback['resolved_circular_bg']);
+        }
+    }
+
+    /**
+     * FIX-API-06: Botão circular com button_color vazio ou inválido usa o fallback 'auto' por icon_variant.
+     */
+    public function test_circular_link_with_empty_or_invalid_button_color_uses_icon_variant_fallback(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'circ_cor_invalida',
+            'circular_icon_background' => 'auto',
+            'button_color' => '#FFE600',
+        ]);
+
+        $emptyColor = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Spotify',
+            'platform' => 'spotify',
+            'display_mode' => 'circular',
+            'icon_variant' => 'white',
+            'button_color' => '',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $invalidColor = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'YouTube',
+            'platform' => 'youtube',
+            'display_mode' => 'circular',
+            'icon_variant' => 'black',
+            'button_color' => 'azul-neon',
+            'is_active' => true,
+            'order_index' => 1,
+        ]);
+
+        $response = $this->getJson('/circ_cor_invalida');
+
+        $response->assertStatus(200);
+        $circular = collect($response->json('circular_links'));
+
+        $this->assertEquals('#000000', $circular->firstWhere('id', $emptyColor->id)['resolved_circular_bg']);
+        $this->assertEquals('#FFFFFF', $circular->firstWhere('id', $invalidColor->id)['resolved_circular_bg']);
+    }
+
+    /**
+     * FIX-API-06: Botão circular sem button_color usa circular_icon_background hexadecimal do artista.
+     */
+    public function test_circular_link_without_button_color_uses_artist_hex_background(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'circ_hex_artista',
+            'circular_icon_background' => '#123456',
+            'button_color' => '#FFE600',
+        ]);
+
+        $button = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Behance',
+            'platform' => 'behance',
+            'display_mode' => 'circular',
+            'icon_variant' => 'white',
+            'button_color' => null,
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/circ_hex_artista');
+
+        $response->assertStatus(200);
+        $circular = collect($response->json('circular_links'))->firstWhere('id', $button->id);
+
+        $this->assertEquals('#123456', $circular['resolved_circular_bg']);
+    }
+
+    /**
+     * FIX-API-09: Perfil público GET /{username} expõe button_shadow_color e circular_shadow_enabled em artist e theme.
+     */
+    public function test_public_profile_exposes_button_shadow_color_and_circular_shadow_enabled(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'sombra_publica',
+            'button_shadow' => 'colored',
+            'button_shadow_color' => '#E15B3A',
+            'circular_shadow_enabled' => false,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'display_mode' => 'button',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/sombra_publica');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'found',
+                'artist' => [
+                    'username' => 'sombra_publica',
+                    'button_shadow' => 'colored',
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+                'data' => [
+                    'theme' => [
+                        'button_shadow' => 'colored',
+                        'button_shadow_color' => '#E15B3A',
+                        'circular_shadow_enabled' => false,
+                    ],
+                ],
+            ]);
+
+        $this->assertFalse($response->json('artist.circular_shadow_enabled'));
+        $this->assertFalse($response->json('data.theme.circular_shadow_enabled'));
+
+        // Fallback padrão quando button_shadow_color é null no banco
+        $fallbackArtist = Artist::factory()->create([
+            'username' => 'sombra_fallback',
+            'button_shadow_color' => null,
+            'circular_shadow_enabled' => true,
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $fallbackArtist->id,
+            'display_mode' => 'button',
+            'is_active' => true,
+        ]);
+
+        $fallbackResponse = $this->getJson('/sombra_fallback');
+
+        $fallbackResponse->assertStatus(200)
+            ->assertJson([
+                'artist' => [
+                    'button_shadow_color' => '#000000',
+                    'circular_shadow_enabled' => true,
+                ],
+                'data' => [
+                    'theme' => [
+                        'button_shadow_color' => '#000000',
+                        'circular_shadow_enabled' => true,
+                    ],
+                ],
+            ]);
+        $this->assertTrue($fallbackResponse->json('artist.circular_shadow_enabled'));
+        $this->assertTrue($fallbackResponse->json('data.theme.circular_shadow_enabled'));
+    }
+
+    /**
+     * FIX-API-09: Botões regulares em GET /{username} expõem font_weight, font_style e text_border resolvidos.
+     */
+    public function test_public_profile_regular_buttons_expose_font_weight_font_style_and_text_border(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'tipografia_botoes',
+            'button_font_weight' => 'normal',
+            'button_font_style' => 'normal',
+            'button_text_border' => 'none',
+        ]);
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'title' => 'Botão Estilizado',
+            'display_mode' => 'button',
+            'font_weight' => 'bold',
+            'font_style' => 'italic',
+            'text_border' => 'yellow',
+            'is_active' => true,
+            'order_index' => 0,
+        ]);
+
+        $response = $this->getJson('/tipografia_botoes');
+
+        $response->assertStatus(200);
+
+        $buttonLinks = $response->json('button_links');
+        $this->assertCount(1, $buttonLinks);
+        $this->assertEquals('bold', $buttonLinks[0]['font_weight']);
+        $this->assertEquals('italic', $buttonLinks[0]['font_style']);
+        $this->assertEquals('yellow', $buttonLinks[0]['text_border']);
+        $this->assertEquals('bold', $buttonLinks[0]['styles']['font_weight']);
+        $this->assertEquals('italic', $buttonLinks[0]['styles']['font_style']);
+        $this->assertEquals('yellow', $buttonLinks[0]['styles']['text_border']);
+
+        $dataButtons = $response->json('data.buttons');
+        $this->assertCount(1, $dataButtons);
+        $this->assertEquals('bold', $dataButtons[0]['font_weight']);
+        $this->assertEquals('italic', $dataButtons[0]['font_style']);
+        $this->assertEquals('yellow', $dataButtons[0]['text_border']);
     }
 }

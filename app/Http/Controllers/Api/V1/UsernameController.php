@@ -4,48 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
+use App\Rules\ArtistUsername;
+use App\Support\ReservedUsernames;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UsernameController extends Controller
 {
-    /**
-     * Lista de palavras reservadas do sistema que não podem ser usadas como @username.
-     * Inclui rotas do frontend SPA, termos de sistema e endpoints internos.
-     */
-    protected const RESERVED_WORDS = [
-        'admin',
-        'api',
-        'app',
-        'assinart',
-        'auth',
-        'cadastro',
-        'confirmacao-email',
-        'contato',
-        'dashboard',
-        'editor',
-        'email',
-        'entrar',
-        'esqueci-senha',
-        'home',
-        'login',
-        'logout',
-        'null',
-        'perfil',
-        'playground',
-        'privacidade',
-        'r',
-        'register',
-        'root',
-        'sac',
-        'settings',
-        'signin',
-        'signup',
-        'status',
-        'termos',
-        'undefined',
-    ];
-
     /**
      * Verifica em tempo real a disponibilidade e validade de um @username.
      * Rota: GET /api/v1/usernames/check?username=...
@@ -64,21 +29,21 @@ class UsernameController extends Controller
         }
 
         // 1. Sanitização: remove espaços e o '@' inicial, convertendo para minúsculas
-        $clean = strtolower(trim($raw));
-        $clean = ltrim($clean, '@');
+        $clean = ArtistUsername::normalize($raw);
 
-        // 2. Validação de tamanho e caracteres (letras, números, '.', '_' e '-')
-        if (!preg_match('/^[a-z0-9_.-]{2,30}$/', $clean)) {
+        // 2. Validação compartilhada de tamanho, caracteres e posição de pontos
+        $formatError = ArtistUsername::formatError($clean);
+        if ($formatError !== null) {
             return response()->json([
                 'username' => $clean,
                 'available' => false,
                 'reason' => 'invalid_format',
-                'message' => 'O @ deve ter entre 2 e 30 caracteres (letras, números, pontos, traços ou sublinhados).',
+                'message' => $formatError,
             ], 200);
         }
 
         // 3. Verificação de colisão com palavras reservadas
-        if (in_array($clean, self::RESERVED_WORDS, true)) {
+        if (ReservedUsernames::contains($clean)) {
             return response()->json([
                 'username' => $clean,
                 'available' => false,
@@ -87,8 +52,8 @@ class UsernameController extends Controller
             ], 200);
         }
 
-        // 4. Verificação de colisão no banco de dados
-        $exists = Artist::where('username', $clean)->exists();
+        // 4. Verificação de colisão no banco de dados (insensível a maiúsculas)
+        $exists = Artist::whereRaw('LOWER(username) = ?', [$clean])->exists();
 
         if ($exists) {
             return response()->json([

@@ -48,10 +48,42 @@ class OnboardingButtonsRequest extends FormRequest
         if ($shadow !== null) {
             $merge['button_shadow'] = strtolower(trim((string) $shadow));
         }
+        $shadowColor = $this->firstPresentInput(['button_shadow_color', 'buttonShadowColor', 'shadowColor']);
+        if ($shadowColor !== null) {
+            $merge['button_shadow_color'] = is_string($shadowColor) ? trim($shadowColor) : $shadowColor;
+        } elseif ($this->hasAny(['buttonShadowColor', 'shadowColor']) && !$this->has('button_shadow_color')) {
+            $merge['button_shadow_color'] = null;
+        }
+
+        if ($this->hasAny(['circular_shadow_enabled', 'circularShadowEnabled'])) {
+            $circularShadow = $this->firstPresentInput(['circular_shadow_enabled', 'circularShadowEnabled']);
+            if ($circularShadow !== null) {
+                $parsed = filter_var($circularShadow, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                $merge['circular_shadow_enabled'] = $parsed ?? $circularShadow;
+            } elseif (!$this->has('circular_shadow_enabled')) {
+                $merge['circular_shadow_enabled'] = null;
+            }
+        }
+
+        $resetIndividual = $this->input('reset_individual_colors') ?? $this->input('resetIndividualColors');
+        if ($resetIndividual !== null) {
+            $merge['reset_individual_colors'] = filter_var($resetIndividual, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        }
 
         if (!empty($merge)) {
             $this->merge($merge);
         }
+    }
+
+    private function firstPresentInput(array $keys): mixed
+    {
+        foreach ($keys as $key) {
+            if ($this->has($key)) {
+                return $this->input($key);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -71,6 +103,15 @@ class OnboardingButtonsRequest extends FormRequest
                 'nullable',
                 'string',
                 'in:none,hard_small,hard_large,soft,diffuse,elevated,colored',
+            ],
+            'button_shadow_color' => [
+                'nullable',
+                'string',
+                'max:30',
+            ],
+            'circular_shadow_enabled' => [
+                'nullable',
+                'boolean',
             ],
             'circular_icon_background' => [
                 'nullable',
@@ -96,6 +137,10 @@ class OnboardingButtonsRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:30',
+            ],
+            'reset_individual_colors' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

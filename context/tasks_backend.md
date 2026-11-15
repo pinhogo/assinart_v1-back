@@ -188,3 +188,28 @@
     - [x] Catálogo de todos os 28 endpoints com métodos, headers, payloads e respostas.
     - [x] Dicionário de dados completo (35 colunas) e herança de estilos.
   - **Critério de aceite:** Abre diretamente com 2 cliques em qualquer navegador web.
+
+---
+
+## Fase 7: Manutenção e Evolução de Contratos (`FIX-API-07`)
+
+- [x] **Task 7.1 (`#262` / `FIX-API-07`): Persistência de Publicação (`is_published` / `publication_status`) e Guarda de Rascunho**
+  - **Arquivos:** `database/migrations/2026_11_13_000001_add_is_published_to_artists_table.php`, `app/Models/Artist.php`, `database/factories/ArtistFactory.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/ProfileController.php`, `app/Http/Controllers/PublicProfileController.php`
+  - **Escopo:**
+    - [x] Adicionar coluna booleana `is_published` na tabela `artists` (padrão `true` no schema para contas legadas e `false` no endpoint `POST /api/v1/auth/register`).
+    - [x] Expor `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`) no model `Artist` e nas respostas de `auth/register`, `auth/login`, `auth/me` e `/api/v1/profile`.
+    - [x] Validar e normalizar `is_published` e `publication_status` em `PATCH /api/v1/profile`.
+    - [x] Bloquear `GET /{username}` com HTTP `404 not_found` para terceiros quando `is_published` é `false`, preservando pré-visualização `200 OK` para o proprietário autenticado via Sanctum.
+    - [x] Cobrir o fluxo completo com testes Feature em `tests/Feature/AuthTest.php`, `tests/Feature/PublicProfileTest.php` e `tests/Feature/ProfilePublicationTest.php`.
+
+- [x] **Task 7.2 (`#259` / `FIX-API-06`): Cor Individual de Botão Circular em `GET /{username}`**
+  - **Arquivos:** `app/Models/Button.php`, `app/Http/Controllers/Concerns/FormatsPublicProfile.php`, `tests/Feature/PublicProfileTest.php`
+  - **Escopo:**
+    - [x] Priorize `buttons.button_color` hexadecimal válido em `Button::getResolvedCircularBgAttribute()` (commit `168b9f6`).
+    - [x] Serialize `button_color` e `resolved_button_color` em `FormatsPublicProfile::formatCircularLinks()` (commit `168b9f6`).
+    - [x] Fixe `button_color = null` na fixture circular determinística de `PublicProfileTest` (commit `b84b81b`).
+    - [x] Cubra cor individual `#ACE1AF` com fallback `auto` para `black`, `white` e `default` em `PublicProfileTest`.
+    - [x] Cubra `button_color` vazio ou inválido com fallback por `icon_variant` em `PublicProfileTest`.
+    - [x] Cubra `circular_icon_background` hexadecimal do artista como fallback em `PublicProfileTest`.
+    - [x] Atualize o contrato de `circular_links[]` na seção 7.1 de `context/api_contracts.md`.
+  - **Critério de aceite:** `resolved_circular_bg` retorna `#ACE1AF` para botão circular com `button_color` hexadecimal válido. Execução de `php artisan test` fica a cargo do orquestrador.

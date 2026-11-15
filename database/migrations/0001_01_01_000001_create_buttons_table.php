@@ -23,7 +23,7 @@ return new class extends Migration
             $table->enum('display_mode', ['button', 'circular'])->default('button');
             $table->enum('icon_variant', ['default', 'black', 'white', 'none'])->default('default');
             $table->boolean('show_icon_background')->default(true);
-            $table->enum('type', ['standard', 'icon_pill', 'card_featured'])->default('standard');
+            $table->string('type', 50)->default('standard');
 
             // Customizações individuais (se null, herda de artists)
             $table->string('button_color', 20)->nullable();

@@ -83,34 +83,138 @@ class OnboardingTest extends TestCase
     }
 
     /**
-     * Tier 2: Etapa 1 rejeita mais de 10 links combinados (422).
+     * Tier 1 & 2 (API-11): Etapa 1 aceita até 30 links combinados (remaining_slots=0) e rejeita 31 links (422).
      */
-    public function test_step1_rejects_more_than_10_links(): void
+    public function test_step1_allows_30_links_and_rejects_more_than_30_links(): void
     {
         $artist = Artist::factory()->create();
 
-        $payload = [
-            'bio' => 'Bio válida',
-            'links' => [
-                ['platform' => 'instagram', 'url' => 'user1'],
-                ['platform' => 'youtube', 'url' => 'user2'],
-                ['platform' => 'x', 'url' => 'user3'],
-                ['platform' => 'spotify', 'url' => 'user4'],
-                ['platform' => 'behance', 'url' => 'user5'],
-                ['platform' => 'tiktok', 'url' => 'user6'],
-                ['platform' => 'pinterest', 'url' => 'user7'],
-                ['platform' => 'discord', 'url' => 'user8'],
-                ['platform' => 'twitch', 'url' => 'user9'],
-                ['platform' => 'telegram', 'url' => 'user10'],
-                ['platform' => 'whatsapp', 'url' => 'user11'],
-            ],
+        $thirtyLinks = [];
+        for ($i = 1; $i <= 30; $i++) {
+            $thirtyLinks[] = [
+                'platform' => 'website',
+                'url' => "https://example.com/site-{$i}",
+                'title' => "Site {$i}",
+            ];
+        }
+
+        $okResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio válida com 30 links',
+                'links' => $thirtyLinks,
+            ]);
+
+        $okResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total_links' => 30,
+                    'remaining_slots' => 0,
+                ],
+            ]);
+        $this->assertEquals(30, $artist->buttons()->count());
+
+        $thirtyOneLinks = $thirtyLinks;
+        $thirtyOneLinks[] = [
+            'platform' => 'custom',
+            'url' => 'https://example.com/extra-31',
+            'title' => 'Extra 31',
+        ];
+
+        $failResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio válida',
+                'links' => $thirtyOneLinks,
+            ]);
+
+        $failResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['links']);
+
+        $draftFailResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'selectedPlatforms' => array_fill(0, 31, 'instagram'),
+            ]);
+
+        $draftFailResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['selectedPlatforms']);
+    }
+
+    /**
+     * Tier 2 (API-11): Etapa 1 rejeita mais de 5 links circulares (422).
+     */
+    public function test_step1_rejects_more_than_5_circular_links(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $links = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $links[] = [
+                'platform' => 'instagram',
+                'url' => "user_{$i}",
+                'display_mode' => 'circular',
+            ];
+        }
+        $links[] = [
+            'platform' => 'website',
+            'url' => 'https://assin.art',
+            'display_mode' => 'button',
         ];
 
         $response = $this->actingAs($artist, 'sanctum')
-            ->putJson('/api/v1/onboarding/links', $payload);
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio com excesso de circulares',
+                'links' => $links,
+            ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['links']);
+            ->assertJsonValidationErrors(['links'])
+            ->assertJson([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+            ]);
+    }
+
+    /**
+     * Tier 1 (API-11): Etapa 1 normaliza order_index colocando circular (0..K-1) antes de button (K..M-1)
+     * preservando a ordem relativa enviada em cada seção.
+     */
+    public function test_step1_normalizes_circular_before_button_preserving_relative_order(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio normalizada',
+                'links' => [
+                    ['platform' => 'instagram', 'url' => 'insta_1', 'display_mode' => 'button'],
+                    ['platform' => 'spotify', 'url' => 'spot_1', 'display_mode' => 'circular'],
+                    ['platform' => 'youtube', 'url' => 'yt_2', 'display_mode' => 'button'],
+                    ['platform' => 'tiktok', 'url' => 'tik_2', 'display_mode' => 'circular'],
+                    ['platform' => 'website', 'url' => 'https://site3.art', 'display_mode' => 'button'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'total_links' => 5,
+                    'remaining_slots' => 25,
+                ],
+            ]);
+
+        $orderedPlatforms = $artist->buttons()
+            ->orderBy('order_index', 'asc')
+            ->pluck('platform')
+            ->all();
+
+        $this->assertSame(['spotify', 'tiktok', 'instagram', 'youtube', 'website'], $orderedPlatforms);
+
+        $orderedIndexes = $artist->buttons()
+            ->orderBy('order_index', 'asc')
+            ->pluck('order_index')
+            ->all();
+
+        $this->assertSame([0, 1, 2, 3, 4], $orderedIndexes);
     }
 
     /**
@@ -354,5 +458,235 @@ class OnboardingTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['button_shadow']);
+    }
+
+    /**
+     * FIX-API-05: /onboarding/links preserva title customizado, text_align, show_icon_background=false, is_active e order_index.
+     */
+    public function test_step1_preserves_custom_title_text_align_show_icon_background_default_is_active_and_order(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'bio' => 'Bio com links personalizados',
+                'links' => [
+                    [
+                        'platform' => 'instagram',
+                        'url' => 'artista_insta',
+                        'title' => 'Meu Insta Oficial',
+                        'display_mode' => 'button',
+                        'text_align' => 'center',
+                        'is_active' => false,
+                        'order_index' => 1,
+                        'button_color' => '#2F4A3C',
+                    ],
+                    [
+                        'platform' => 'spotify',
+                        'url' => 'artista_spot',
+                        'display_mode' => 'circular',
+                        'icon_variant' => 'none',
+                        'order_index' => 0,
+                    ],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+
+        $insta = $artist->buttons()->where('platform', 'instagram')->firstOrFail();
+        $this->assertEquals('Meu Insta Oficial', $insta->title);
+        $this->assertEquals('center', $insta->text_align);
+        $this->assertFalse((bool) $insta->show_icon_background);
+        $this->assertFalse((bool) $insta->is_active);
+        $this->assertEquals(1, $insta->order_index);
+        $this->assertEquals('#2F4A3C', $insta->button_color);
+
+        $spotify = $artist->buttons()->where('platform', 'spotify')->firstOrFail();
+        $this->assertTrue((bool) $spotify->show_icon_background);
+        $this->assertEquals('default', $spotify->icon_variant);
+        $this->assertEquals('left', $spotify->text_align);
+    }
+
+    /**
+     * FIX-API-05: /onboarding/buttons preserva cores individuais por padrão e só limpa com reset_individual_colors=true.
+     */
+    public function test_step3_preserves_individual_button_colors_unless_reset_flag_is_true(): void
+    {
+        $artist = Artist::factory()->create();
+        $customBtn = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'button_color' => '#E15B3A',
+        ]);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'pill',
+                'button_color' => '#FFE600',
+            ])
+            ->assertStatus(200);
+
+        $this->assertEquals('#E15B3A', $customBtn->fresh()->button_color);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'button_color' => '#FFE600',
+                'reset_individual_colors' => true,
+            ])
+            ->assertStatus(200);
+
+        $this->assertNull($customBtn->fresh()->button_color);
+    }
+
+    /**
+     * FIX-API-09: Etapa 3 persiste button_shadow_color e circular_shadow_enabled (snake_case e camelCase).
+     */
+    public function test_step3_saves_button_shadow_color_and_circular_shadow_enabled(): void
+    {
+        $artist = Artist::factory()->create([
+            'button_shadow_color' => null,
+            'circular_shadow_enabled' => true,
+        ]);
+
+        // 1. Verifica fallbacks quando campos não são enviados
+        $defaultResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+            ]);
+
+        $defaultResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#000000',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($defaultResponse->json('data.circular_shadow_enabled'));
+
+        // 2. Salva snake_case com circular_shadow_enabled = false
+        $response = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'rounded',
+                'button_shadow' => 'colored',
+                'button_shadow_color' => '#FF3366',
+                'circular_shadow_enabled' => false,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow' => 'colored',
+                    'button_shadow_color' => '#FF3366',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($response->json('data.circular_shadow_enabled'));
+
+        $artist->refresh();
+        $this->assertEquals('#FF3366', $artist->button_shadow_color);
+        $this->assertFalse($artist->circular_shadow_enabled);
+
+        // 3. Aceita camelCase buttonShadowColor / shadowColor e string boolean em circularShadowEnabled
+        $camelResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'pill',
+                'buttonShadowColor' => '#112233',
+                'circularShadowEnabled' => 'true',
+            ]);
+
+        $camelResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#112233',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($camelResponse->json('data.circular_shadow_enabled'));
+
+        $aliasResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'shadowColor' => '#445566',
+                'circularShadowEnabled' => 'false',
+            ]);
+
+        $aliasResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#445566',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($aliasResponse->json('data.circular_shadow_enabled'));
+
+        // 4. Rejeita booleano inválido com 422
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'circular_shadow_enabled' => 'nao-booleano',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['circular_shadow_enabled']);
+    }
+
+    /**
+     * FIX-API-09: PUT /api/v1/profile persiste e GET /api/v1/profile retorna button_shadow_color e circular_shadow_enabled.
+     */
+    public function test_profile_update_and_show_persist_and_return_shadow_color_and_circular_shadow(): void
+    {
+        $artist = Artist::factory()->create([
+            'button_shadow_color' => '#000000',
+            'circular_shadow_enabled' => true,
+        ]);
+
+        $putResponse = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', [
+                'button_shadow_color' => '#E15B3A',
+                'circular_shadow_enabled' => false,
+            ]);
+
+        $putResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($putResponse->json('data.circular_shadow_enabled'));
+
+        $getResponse = $this->actingAs($artist, 'sanctum')
+            ->getJson('/api/v1/profile');
+
+        $getResponse->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#E15B3A',
+                    'circular_shadow_enabled' => false,
+                ],
+            ]);
+        $this->assertFalse($getResponse->json('data.circular_shadow_enabled'));
+
+        // Confirma suporte a camelCase em PUT /api/v1/profile
+        $camelPut = $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', [
+                'shadowColor' => '#2F4A3C',
+                'circularShadowEnabled' => '1',
+            ]);
+
+        $camelPut->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'button_shadow_color' => '#2F4A3C',
+                    'circular_shadow_enabled' => true,
+                ],
+            ]);
+        $this->assertTrue($camelPut->json('data.circular_shadow_enabled'));
     }
 }

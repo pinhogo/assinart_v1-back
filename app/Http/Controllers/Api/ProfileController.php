@@ -2,197 +2,94 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ManagesProfileMedia;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateProfileRequest;
+use App\Models\Artist;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
-    /**
-     * Retorna os dados do perfil do artista autenticado.
-     * GET /api/v1/profile
-     */
+    use ManagesProfileMedia;
+
     public function show(Request $request): JsonResponse
     {
         return response()->json([
             'status' => 'success',
-            'data' => $request->user(),
+            'data' => $this->serializeArtist($request->user()),
         ], 200);
     }
 
-    /**
-     * Atualiza dados de perfil e tema visual Neo-Brutalista.
-     * PUT /api/v1/profile
-     */
-    public function update(Request $request): JsonResponse
+    public function update(UpdateProfileRequest $request): JsonResponse
     {
         $artist = $request->user();
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:100',
-            'username' => 'sometimes|required|string|max:50|unique:artists,username,' . $artist->id,
-            'bio' => 'nullable|string|max:500',
-            'background_color' => 'nullable|string|max:20',
-            'background_id' => 'nullable|string|max:50',
-            'button_shape' => 'nullable|in:square,rounded,pill',
-            'avatar_shape' => 'nullable|in:circle,square,rounded',
-            'font_family' => 'nullable|string|max:50',
-            'font_color' => 'nullable|string|max:20',
-            'border_style' => 'nullable|string|max:30',
-            'icon_variant' => 'nullable|in:default,black_outline,white_outline,none',
-        ]);
+        if ($request->has('avatar') && is_string($request->input('avatar')) && str_starts_with($request->input('avatar'), 'preset:') && !$request->has('avatar_url')) {
+            $validated['avatar_url'] = null;
+        }
+
+        if ($request->has('cover_url') && !empty($validated['cover_url']) && !$request->has('cover_color') && !$request->has('cover')) {
+            $validated['cover_color'] = null;
+        }
+        if ($request->has('cover_color') && !empty($validated['cover_color']) && !$request->has('cover_url') && !$request->has('cover')) {
+            $validated['cover_url'] = null;
+        }
+
+        if ($request->has('background') && is_string($bg = $request->input('background'))) {
+            if (str_starts_with($bg, 'color:')) {
+                $validated['background_color'] = substr($bg, 6);
+                $validated['background_id'] = null;
+            } elseif (str_starts_with($bg, 'preset:')) {
+                $validated['background_id'] = substr($bg, 7);
+            }
+        }
+
+        if ($request->has('cover')) {
+            $cov = $request->input('cover');
+            if ($cov === null || $cov === 'null') {
+                $validated['cover_url'] = null;
+                $validated['cover_color'] = null;
+            } elseif (is_string($cov) && str_starts_with($cov, 'color:')) {
+                $validated['cover_color'] = substr($cov, 6);
+                $validated['cover_url'] = null;
+            }
+        }
+
+        if (array_key_exists('publication_status', $validated)) {
+            if (!array_key_exists('is_published', $validated)) {
+                $validated['is_published'] = $validated['publication_status'] === 'published';
+            }
+            unset($validated['publication_status']);
+        }
+
+        if (array_key_exists('is_published', $validated)) {
+            $validated['is_published'] = (bool) $validated['is_published'];
+        }
+
+        if (array_key_exists('circular_shadow_enabled', $validated)) {
+            if ($validated['circular_shadow_enabled'] === null) {
+                unset($validated['circular_shadow_enabled']);
+            } else {
+                $validated['circular_shadow_enabled'] = (bool) $validated['circular_shadow_enabled'];
+            }
+        }
 
         $artist->update($validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Perfil atualizado com sucesso.',
-            'data' => $artist,
+            'data' => $this->serializeArtist($artist->fresh()),
         ], 200);
     }
 
-    /**
-     * Upload de foto de avatar com prevenção de arquivos órfãos.
-     * POST /api/v1/profile/avatar
-     * Max 5MB (5120 KB), mimes: jpeg, png, jpg, webp.
-     */
-    public function uploadAvatar(Request $request): JsonResponse
+    private function serializeArtist(Artist $artist): array
     {
-        $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+        return array_merge($artist->toArray(), [
+            'button_shadow_color' => $artist->button_shadow_color ?? '#000000',
+            'circular_shadow_enabled' => (bool) ($artist->circular_shadow_enabled ?? true),
         ]);
-
-        $artist = $request->user();
-
-        // REGRA CRÍTICA: Se avatar_url já estiver preenchida, exclui o arquivo antigo do storage
-        if ($artist->avatar_url) {
-            $oldPath = $this->extractRelativeStoragePath($artist->avatar_url);
-            if ($oldPath) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
-
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $avatarUrl = Storage::url($path);
-
-        $artist->update([
-            'avatar_url' => $avatarUrl,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Avatar atualizado com sucesso.',
-            'avatar_url' => $artist->avatar_url,
-        ], 200);
-    }
-
-    /**
-     * Remove o avatar do artista e exclui fisicamente o arquivo do storage.
-     * DELETE /api/v1/profile/avatar
-     */
-    public function deleteAvatar(Request $request): JsonResponse
-    {
-        $artist = $request->user();
-
-        if ($artist->avatar_url) {
-            $oldPath = $this->extractRelativeStoragePath($artist->avatar_url);
-            if ($oldPath) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
-
-        $artist->update([
-            'avatar_url' => null,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Avatar removido com sucesso.',
-        ], 200);
-    }
-
-    /**
-     * Upload de imagem de capa / banner de topo com prevenção de arquivos órfãos.
-     * POST /api/v1/profile/cover
-     * Max 10MB (10240 KB), mimes: jpeg, png, jpg, webp.
-     */
-    public function uploadCover(Request $request): JsonResponse
-    {
-        $request->validate([
-            'cover' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240',
-        ]);
-
-        $artist = $request->user();
-
-        // REGRA CRÍTICA: Se cover_url já estiver preenchida, exclui o arquivo antigo do storage
-        if ($artist->cover_url) {
-            $oldPath = $this->extractRelativeStoragePath($artist->cover_url);
-            if ($oldPath) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
-
-        $path = $request->file('cover')->store('covers', 'public');
-        $coverUrl = Storage::url($path);
-
-        $artist->update([
-            'cover_url' => $coverUrl,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Capa atualizada com sucesso.',
-            'cover_url' => $artist->cover_url,
-        ], 200);
-    }
-
-    /**
-     * Remove a imagem de capa do artista e exclui fisicamente o arquivo do storage.
-     * DELETE /api/v1/profile/cover
-     */
-    public function deleteCover(Request $request): JsonResponse
-    {
-        $artist = $request->user();
-
-        if ($artist->cover_url) {
-            $oldPath = $this->extractRelativeStoragePath($artist->cover_url);
-            if ($oldPath) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
-
-        $artist->update([
-            'cover_url' => null,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Capa removida com sucesso.',
-        ], 200);
-    }
-
-    /**
-     * Extrai o caminho relativo dentro do disco 'public' a partir de uma URL ou caminho salvo.
-     * Ex.: '/storage/avatars/hash.webp' -> 'avatars/hash.webp'
-     *      'http://localhost:8000/storage/covers/banner.jpg' -> 'covers/banner.jpg'
-     */
-    protected function extractRelativeStoragePath(?string $url): ?string
-    {
-        if (empty($url)) {
-            return null;
-        }
-
-        $parsedPath = parse_url($url, PHP_URL_PATH);
-        $path = ($parsedPath !== false && $parsedPath !== null) ? $parsedPath : $url;
-
-        $path = str_replace('\\', '/', $path);
-        $path = ltrim($path, '/');
-
-        if (str_starts_with($path, 'storage/')) {
-            $path = substr($path, strlen('storage/'));
-        }
-
-        return !empty($path) ? $path : null;
     }
 }
