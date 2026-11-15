@@ -20,7 +20,12 @@ class ButtonTest extends TestCase
         $this->postJson('/api/v1/buttons', ['title' => 'Link', 'url' => 'https://test.com'])->assertStatus(401);
         $this->putJson('/api/v1/buttons/1', ['title' => 'Link'])->assertStatus(401);
         $this->deleteJson('/api/v1/buttons/1')->assertStatus(401);
-        $this->postJson('/api/v1/buttons/reorder', ['ordered_ids' => [1, 2]])->assertStatus(401);
+        $this->postJson('/api/v1/buttons/reorder', [
+            'items' => [
+                ['id' => 1, 'display_mode' => 'button'],
+                ['id' => 2, 'display_mode' => 'button'],
+            ],
+        ])->assertStatus(401);
     }
 
     /**
@@ -213,21 +218,31 @@ class ButtonTest extends TestCase
     {
         $artist = Artist::factory()->create();
 
-        $b1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0]);
-        $b2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 1]);
-        $b3 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2]);
+        $b1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0, 'display_mode' => 'button']);
+        $b2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 1, 'display_mode' => 'button']);
+        $b3 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2, 'display_mode' => 'button']);
 
         // Inverte a ordem: [b3, b1, b2]
         $response = $this->actingAs($artist, 'sanctum')
             ->postJson('/api/v1/buttons/reorder', [
-                'ordered_ids' => [$b3->id, $b1->id, $b2->id],
+                'items' => [
+                    ['id' => $b3->id, 'display_mode' => 'button'],
+                    ['id' => $b1->id, 'display_mode' => 'button'],
+                    ['id' => $b2->id, 'display_mode' => 'button'],
+                ],
             ]);
 
         $response->assertStatus(200)
             ->assertJson([
                 'status' => 'success',
                 'message' => 'Ordem dos botões atualizada com sucesso.',
+                'data' => [
+                    'updated_count' => 3,
+                ],
             ]);
+
+        $returnedIds = collect($response->json('data.buttons'))->pluck('id')->all();
+        $this->assertSame([$b3->id, $b1->id, $b2->id], $returnedIds);
 
         $b3->refresh();
         $b1->refresh();
@@ -239,23 +254,229 @@ class ButtonTest extends TestCase
     }
 
     /**
-     * Tier 2: Reordenação com array vazio ou IDs duplicados é rejeitada (422).
+     * Tier 1 (API-10): Reordenação suporta mover item para topo, meio e fim preservando índices contíguos.
      */
-    public function test_reorder_validation_fails_on_empty_or_duplicate_ids(): void
+    public function test_reorder_moves_button_to_top_middle_and_end(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $b1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0, 'display_mode' => 'button']);
+        $b2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 1, 'display_mode' => 'button']);
+        $b3 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2, 'display_mode' => 'button']);
+        $b4 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 3, 'display_mode' => 'button']);
+
+        // Move b4 para o topo, b1 para o meio e b2 para o fim: [b4, b3, b1, b2]
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => $b4->id, 'display_mode' => 'button'],
+                    ['id' => $b3->id, 'display_mode' => 'button'],
+                    ['id' => $b1->id, 'display_mode' => 'button'],
+                    ['id' => $b2->id, 'display_mode' => 'button'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+
+        $returnedIds = collect($response->json('data.buttons'))->pluck('id')->all();
+        $this->assertSame([$b4->id, $b3->id, $b1->id, $b2->id], $returnedIds);
+
+        $this->assertSame(0, $b4->fresh()->order_index);
+        $this->assertSame(1, $b3->fresh()->order_index);
+        $this->assertSame(2, $b1->fresh()->order_index);
+        $this->assertSame(3, $b2->fresh()->order_index);
+    }
+
+    /**
+     * Tier 1 (API-10): Troca de seção button <-> circular normaliza circular em 0..K-1 e button em K..M-1.
+     */
+    public function test_reorder_switches_sections_and_normalizes_circular_then_button_indexes(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $c1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0, 'display_mode' => 'circular', 'show_icon_background' => true]);
+        $b1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 1, 'display_mode' => 'button']);
+        $b2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2, 'display_mode' => 'button']);
+
+        // Envia b2 promovido a circular, c1 rebaixado a button e b1 mantido em button (mesmo intercalados no payload)
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => $c1->id, 'display_mode' => 'button'],
+                    ['id' => $b2->id, 'display_mode' => 'circular'],
+                    ['id' => $b1->id, 'display_mode' => 'button'],
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'updated_count' => 3,
+                ],
+            ]);
+
+        $returnedIds = collect($response->json('data.buttons'))->pluck('id')->all();
+        // circular primeiro (0..K-1), seguido de button (K..M-1)
+        $this->assertSame([$b2->id, $c1->id, $b1->id], $returnedIds);
+
+        $b2->refresh();
+        $c1->refresh();
+        $b1->refresh();
+
+        $this->assertSame('circular', $b2->display_mode);
+        $this->assertSame(0, $b2->order_index);
+        $this->assertSame('button', $c1->display_mode);
+        $this->assertSame(1, $c1->order_index);
+        $this->assertSame('button', $b1->display_mode);
+        $this->assertSame(2, $b1->order_index);
+    }
+
+    /**
+     * Tier 1 (API-10): Promoção para circular força show_icon_background=true e converte icon_variant 'none' para 'default'.
+     */
+    public function test_reorder_promoting_to_circular_forces_background_and_converts_none_icon_to_default(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $noneButton = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 0,
+            'display_mode' => 'button',
+            'icon_variant' => 'none',
+            'show_icon_background' => false,
+        ]);
+
+        $whiteButton = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'order_index' => 1,
+            'display_mode' => 'button',
+            'icon_variant' => 'white',
+            'show_icon_background' => false,
+        ]);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => $noneButton->id, 'display_mode' => 'circular'],
+                    ['id' => $whiteButton->id, 'display_mode' => 'circular'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+
+        $noneButton->refresh();
+        $whiteButton->refresh();
+
+        $this->assertSame('circular', $noneButton->display_mode);
+        $this->assertSame('default', $noneButton->icon_variant);
+        $this->assertTrue($noneButton->show_icon_background);
+        $this->assertSame(0, $noneButton->order_index);
+
+        $this->assertSame('circular', $whiteButton->display_mode);
+        $this->assertSame('white', $whiteButton->icon_variant);
+        $this->assertTrue($whiteButton->show_icon_background);
+        $this->assertSame(1, $whiteButton->order_index);
+    }
+
+    /**
+     * Tier 1 (API-10): Reordenação corrige colisões pré-existentes de order_index entre seções.
+     */
+    public function test_reorder_fixes_preexisting_order_index_collisions(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $c1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0, 'display_mode' => 'circular', 'show_icon_background' => true]);
+        $c2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 0, 'display_mode' => 'circular', 'show_icon_background' => true]);
+        $b1 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2, 'display_mode' => 'button']);
+        $b2 = Button::factory()->create(['artist_id' => $artist->id, 'order_index' => 2, 'display_mode' => 'button']);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => $c2->id, 'display_mode' => 'circular'],
+                    ['id' => $c1->id, 'display_mode' => 'circular'],
+                    ['id' => $b2->id, 'display_mode' => 'button'],
+                    ['id' => $b1->id, 'display_mode' => 'button'],
+                ],
+            ]);
+
+        $response->assertStatus(200);
+
+        $this->assertSame(0, $c2->fresh()->order_index);
+        $this->assertSame(1, $c1->fresh()->order_index);
+        $this->assertSame(2, $b2->fresh()->order_index);
+        $this->assertSame(3, $b1->fresh()->order_index);
+    }
+
+    /**
+     * Tier 2 (API-10): Reordenação bloqueia mais de 5 botões circulares com HTTP 422 e preserva estado.
+     */
+    public function test_reorder_rejects_more_than_5_circular_buttons_with_422(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $buttons = collect();
+        for ($i = 0; $i < 6; $i++) {
+            $buttons->push(Button::factory()->create([
+                'artist_id' => $artist->id,
+                'order_index' => $i,
+                'display_mode' => $i < 5 ? 'circular' : 'button',
+                'show_icon_background' => $i < 5,
+            ]));
+        }
+
+        $items = $buttons->map(fn (Button $btn) => [
+            'id' => $btn->id,
+            'display_mode' => 'circular',
+        ])->all();
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', ['items' => $items]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Você pode ter no máximo 5 botões circulares.',
+            ]);
+
+        // O 6º botão não foi convertido para circular
+        $this->assertSame('button', $buttons->last()->fresh()->display_mode);
+        $this->assertSame(5, $buttons->last()->fresh()->order_index);
+    }
+
+    /**
+     * Tier 2: Reordenação com array vazio, IDs duplicados ou display_mode inválido é rejeitada (422).
+     */
+    public function test_reorder_validation_fails_on_empty_duplicate_ids_or_invalid_mode(): void
     {
         $artist = Artist::factory()->create();
 
         // Vazio
         $this->actingAs($artist, 'sanctum')
-            ->postJson('/api/v1/buttons/reorder', ['ordered_ids' => []])
+            ->postJson('/api/v1/buttons/reorder', ['items' => []])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['ordered_ids']);
+            ->assertJsonValidationErrors(['items']);
 
         // Duplicados
         $this->actingAs($artist, 'sanctum')
-            ->postJson('/api/v1/buttons/reorder', ['ordered_ids' => [1, 1, 2]])
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => 1, 'display_mode' => 'button'],
+                    ['id' => 1, 'display_mode' => 'circular'],
+                ],
+            ])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['ordered_ids.0']);
+            ->assertJsonValidationErrors(['items.0.id']);
+
+        // display_mode inválido
+        $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons/reorder', [
+                'items' => [
+                    ['id' => 1, 'display_mode' => 'pill'],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['items.0.display_mode']);
     }
 
     /**
@@ -309,14 +530,18 @@ class ButtonTest extends TestCase
         $artistA = Artist::factory()->create();
         $artistB = Artist::factory()->create();
 
-        $btnA1 = Button::factory()->create(['artist_id' => $artistA->id, 'order_index' => 0]);
-        $btnA2 = Button::factory()->create(['artist_id' => $artistA->id, 'order_index' => 1]);
-        $btnB = Button::factory()->create(['artist_id' => $artistB->id, 'order_index' => 0]);
+        $btnA1 = Button::factory()->create(['artist_id' => $artistA->id, 'order_index' => 0, 'display_mode' => 'button']);
+        $btnA2 = Button::factory()->create(['artist_id' => $artistA->id, 'order_index' => 1, 'display_mode' => 'button']);
+        $btnB = Button::factory()->create(['artist_id' => $artistB->id, 'order_index' => 0, 'display_mode' => 'button']);
 
         // Artista A tenta reordenar incluindo btnB
         $response = $this->actingAs($artistA, 'sanctum')
             ->postJson('/api/v1/buttons/reorder', [
-                'ordered_ids' => [$btnA2->id, $btnB->id, $btnA1->id],
+                'items' => [
+                    ['id' => $btnA2->id, 'display_mode' => 'circular'],
+                    ['id' => $btnB->id, 'display_mode' => 'button'],
+                    ['id' => $btnA1->id, 'display_mode' => 'button'],
+                ],
             ]);
 
         $response->assertStatus(403)
@@ -325,13 +550,14 @@ class ButtonTest extends TestCase
                 'message' => 'Um ou mais botões informados não pertencem ao seu perfil ou não existem.',
             ]);
 
-        // Verifica integridade: nenhuma ordem foi alterada
+        // Verifica integridade: nenhuma ordem ou display_mode foi alterado
         $btnA1->refresh();
         $btnA2->refresh();
         $btnB->refresh();
 
         $this->assertEquals(0, $btnA1->order_index);
         $this->assertEquals(1, $btnA2->order_index);
+        $this->assertEquals('button', $btnA2->display_mode);
         $this->assertEquals(0, $btnB->order_index);
     }
 
