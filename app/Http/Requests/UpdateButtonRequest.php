@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateButtonRequest extends FormRequest
@@ -15,7 +16,7 @@ class UpdateButtonRequest extends FormRequest
     {
         return [
             'title' => ['sometimes', 'required', 'string', 'max:100'],
-            'url' => ['sometimes', 'required', 'url', 'max:2048'],
+            'url' => $this->urlRules(),
             'platform' => ['nullable', 'string', 'max:50'],
             'display_mode' => ['nullable', 'string', 'in:button,circular'],
             'icon_variant' => ['nullable', 'string', 'in:default,black,white,none'],
@@ -40,11 +41,39 @@ class UpdateButtonRequest extends FormRequest
             'title.required' => 'O título do botão é obrigatório.',
             'title.max' => 'O título não pode ter mais de 100 caracteres.',
             'url.required' => 'A URL de destino é obrigatória.',
+            'url.string' => 'Informe um endereço de e-mail válido.',
             'url.url' => 'A URL de destino deve ser um link válido.',
             'url.max' => 'A URL de destino não pode ter mais de 2048 caracteres.',
             'display_mode.in' => 'O modo de exibição deve ser button ou circular.',
             'icon_variant.in' => 'A variante do ícone deve ser default, black, white ou none.',
             'type.in' => 'O tipo de botão deve ser standard, featured, icon_pill ou card_featured.',
         ];
+    }
+
+    private function urlRules(): array
+    {
+        if ($this->resolveTargetPlatform() === 'email') {
+            return [
+                'sometimes',
+                'required',
+                'string',
+                'max:2048',
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    $cleanEmail = trim((string) preg_replace('/^mailto:/i', '', trim((string) $value)));
+
+                    if (filter_var($cleanEmail, FILTER_VALIDATE_EMAIL) === false) {
+                        $fail('Informe um endereço de e-mail válido.');
+                    }
+                },
+            ];
+        }
+
+        return ['sometimes', 'required', 'url', 'max:2048'];
+    }
+
+    private function resolveTargetPlatform(): ?string
+    {
+        return $this->input('platform')
+            ?? $this->user()?->buttons()->whereKey($this->route('id'))->value('platform');
     }
 }

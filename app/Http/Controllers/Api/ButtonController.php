@@ -40,6 +40,9 @@ class ButtonController extends Controller
 
         $validated = $request->validated();
         $validated['platform'] = $validated['platform'] ?? 'custom';
+        if ($validated['platform'] === 'email' && array_key_exists('url', $validated)) {
+            $validated['url'] = $this->normalizeEmailUrl((string) $validated['url']);
+        }
         $validated['type'] = $validated['type'] ?? 'standard';
         $validated['is_active'] = $validated['is_active'] ?? true;
 
@@ -79,6 +82,11 @@ class ButtonController extends Controller
         $button = $artist->buttons()->findOrFail($id);
 
         $validated = $request->validated();
+
+        $targetPlatform = $validated['platform'] ?? $button->platform;
+        if ($targetPlatform === 'email' && array_key_exists('url', $validated)) {
+            $validated['url'] = $this->normalizeEmailUrl((string) $validated['url']);
+        }
 
         $targetDisplayMode = $validated['display_mode'] ?? $button->display_mode;
         if ($targetDisplayMode === 'circular') {
@@ -145,5 +153,12 @@ class ButtonController extends Controller
             'status' => 'success',
             'message' => 'Todos os botões foram excluídos com sucesso.',
         ], 200);
+    }
+
+    private function normalizeEmailUrl(string $url): string
+    {
+        $cleanEmail = trim((string) preg_replace('/^mailto:/i', '', trim($url)));
+
+        return 'mailto:' . $cleanEmail;
     }
 }
