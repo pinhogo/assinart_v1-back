@@ -102,6 +102,53 @@ class ButtonOrderService
     }
 
     /**
+     * Persiste apenas os botões alterados de um plano normalizado.
+     *
+     * @param  array<int, array{button: Button, attributes: array<string, mixed>}>  $plan
+     */
+    public function applyNormalizedPlan(array $plan): void
+    {
+        foreach ($plan as $entry) {
+            /** @var Button $button */
+            $button = $entry['button'];
+            $button->fill($entry['attributes']);
+
+            if ($button->isDirty()) {
+                $button->save();
+            }
+        }
+    }
+
+    /**
+     * Ordena payloads de criação em lote colocando `circular` (0..K-1) antes de `button` (K..M-1),
+     * preservando a ordem relativa dentro de cada seção.
+     *
+     * @param  array<int, array<string, mixed>>  $parsedButtons
+     * @return array<int, array<string, mixed>>
+     */
+    public function sortAndIndexParsedButtons(array $parsedButtons): array
+    {
+        $circulars = [];
+        $buttons = [];
+
+        foreach ($parsedButtons as $buttonData) {
+            if (($buttonData['display_mode'] ?? 'button') === 'circular') {
+                $circulars[] = $buttonData;
+            } else {
+                $buttons[] = $buttonData;
+            }
+        }
+
+        $ordered = array_merge($circulars, $buttons);
+
+        foreach ($ordered as $index => $buttonData) {
+            $ordered[$index]['order_index'] = $index;
+        }
+
+        return $ordered;
+    }
+
+    /**
      * Conta quantos itens ficarão no modo `circular` após a normalização.
      *
      * @param  array<int, array{button: Button, attributes: array<string, mixed>}>  $plan

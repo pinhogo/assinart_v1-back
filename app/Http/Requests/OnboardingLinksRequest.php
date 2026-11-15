@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Services\ButtonOrderService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class OnboardingLinksRequest extends FormRequest
 {
@@ -67,9 +69,11 @@ class OnboardingLinksRequest extends FormRequest
     {
         $platforms = 'website,youtube,x,linkedin,soundcloud,instagram,spotify,threads,pinterest,discord,whatsapp,tiktok,facebook,behance,telegram,twitch,email,custom';
 
+        $maxButtons = ButtonOrderService::MAX_BUTTONS_PER_ARTIST;
+
         return [
             'bio' => ['nullable', 'string', 'max:160'],
-            'links' => ['nullable', 'array', 'max:10'],
+            'links' => ['nullable', 'array', "max:{$maxButtons}"],
             'links.*.platform' => [
                 'required_with:links',
                 'string',
@@ -90,13 +94,39 @@ class OnboardingLinksRequest extends FormRequest
             'links.*.font_weight' => ['nullable', 'in:normal,bold'],
             'links.*.font_style' => ['nullable', 'in:normal,italic'],
             'links.*.text_border' => ['nullable', 'in:none,black,white,yellow'],
-            'selectedPlatforms' => ['nullable', 'array', 'max:10'],
+            'selectedPlatforms' => ['nullable', 'array', "max:{$maxButtons}"],
             'selectedPlatforms.*' => [
                 'string',
                 "in:{$platforms}",
             ],
             'linkValues' => ['nullable', 'array'],
         ];
+    }
+
+    /**
+     * Valida o teto máximo de botões circulares no payload normalizado.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $links = $this->input('links', []);
+
+            if (!is_array($links)) {
+                return;
+            }
+
+            $circularCount = 0;
+
+            foreach ($links as $item) {
+                if (is_array($item) && ($item['display_mode'] ?? 'button') === 'circular') {
+                    $circularCount++;
+                }
+            }
+
+            if ($circularCount > ButtonOrderService::MAX_CIRCULAR_BUTTONS) {
+                $validator->errors()->add('links', 'Você pode ter no máximo 5 botões circulares.');
+            }
+        });
     }
 
     /**
@@ -108,8 +138,8 @@ class OnboardingLinksRequest extends FormRequest
     {
         return [
             'bio.max' => 'A biografia não pode ultrapassar 160 caracteres.',
-            'links.max' => 'Você pode cadastrar no máximo 10 links combinados entre redes sociais e personalizados.',
-            'selectedPlatforms.max' => 'Você pode escolher até 10 plataformas combinadas no onboarding.',
+            'links.max' => 'Você pode cadastrar no máximo 30 links combinados entre redes sociais e personalizados.',
+            'selectedPlatforms.max' => 'Você pode escolher até 30 plataformas combinadas no onboarding.',
             'links.*.platform.in' => 'A plataforma informada não é suportada.',
             'selectedPlatforms.*.in' => 'Uma das plataformas selecionadas não é suportada.',
         ];
