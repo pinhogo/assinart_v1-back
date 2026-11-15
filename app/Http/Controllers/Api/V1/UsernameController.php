@@ -5,48 +5,12 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Artist;
 use App\Rules\ArtistUsername;
+use App\Support\ReservedUsernames;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class UsernameController extends Controller
 {
-    /**
-     * Lista de palavras reservadas do sistema que não podem ser usadas como @username.
-     * Inclui rotas do frontend SPA, termos de sistema e endpoints internos.
-     */
-    protected const RESERVED_WORDS = [
-        'admin',
-        'api',
-        'app',
-        'assinart',
-        'auth',
-        'cadastro',
-        'confirmacao-email',
-        'contato',
-        'dashboard',
-        'editor',
-        'email',
-        'entrar',
-        'esqueci-senha',
-        'home',
-        'login',
-        'logout',
-        'null',
-        'perfil',
-        'playground',
-        'privacidade',
-        'r',
-        'register',
-        'root',
-        'sac',
-        'settings',
-        'signin',
-        'signup',
-        'status',
-        'termos',
-        'undefined',
-    ];
-
     /**
      * Verifica em tempo real a disponibilidade e validade de um @username.
      * Rota: GET /api/v1/usernames/check?username=...
@@ -79,7 +43,7 @@ class UsernameController extends Controller
         }
 
         // 3. Verificação de colisão com palavras reservadas
-        if (in_array($clean, self::RESERVED_WORDS, true)) {
+        if (ReservedUsernames::contains($clean)) {
             return response()->json([
                 'username' => $clean,
                 'available' => false,
