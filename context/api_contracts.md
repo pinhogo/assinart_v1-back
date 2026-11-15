@@ -137,9 +137,13 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
   {
     "available": false,
     "username": "admin",
-    "reason": "Nome de usuário reservado ou já utilizado."
+    "reason": "reserved",
+    "message": "Este nome de usuário é reservado pelo sistema."
   }
   ```
+- **Lista Canônica de Slugs Reservados (`App\Support\ReservedUsernames::ALL`, 36 itens):**
+  `admin`, `ajuda`, `api`, `app`, `assinart`, `auth`, `cadastro`, `confirmacao-email`, `contato`, `dashboard`, `editor`, `email`, `entrar`, `esqueci-senha`, `home`, `login`, `logout`, `null`, `perfil`, `playground`, `privacidade`, `r`, `register`, `root`, `sac`, `settings`, `signin`, `signup`, `status`, `storage`, `suporte`, `termos`, `teste`, `undefined`, `up`, `www`.
+- **Aplicação Centralizada:** O backend aplica essa lista única em `GET /api/v1/usernames/check`, `POST /api/v1/auth/register`, `PATCH /api/v1/profile`, `PublicProfileController::show` e na restrição da rota pública `GET /{username}` (`routes/web_public.php`).
 
 ---
 
