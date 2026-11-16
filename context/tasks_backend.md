@@ -320,10 +320,10 @@
 
 ---
 
-## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20..21 DONE`; `API-22..23 FLUXO E`)
+## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20`, `API-21`, `API-23` `DONE`; `API-22` `FLUXO E`)
 
 > Origem: `context/BACKLOG_MELHORIAS.md` (`API-20`, `API-21`, `API-22`, `API-23`) e `assinart_v1/context/BACKLOG_MELHORIAS.md` (`CAD-11`, `FIX-GLB-22`).
-> Executado via Orca (`run_58b77ee84902`). `API-20` e `API-21` concluídas em `DONE`; `API-22` e `API-23` seguem em `FLUXO E` aguardando configuração DNS na Hostinger e execução ao vivo no daemon Docker.
+> Executado via Orca (`run_58b77ee84902`). `API-20`, `API-21` e `API-23` concluídas em `DONE`; `API-22` segue em `FLUXO E` aguardando configuração DNS na Hostinger.
 
 - [x] **Task 10.1 (`#3` / `API-20`): E-mail de Confirmação Real e Validação de Token**
   - **Arquivos:** `database/migrations/2026_11_16_000001_create_email_verification_tokens_table.php`, `app/Mail/VerifyEmailMail.php`, `resources/views/emails/verify-email.blade.php`, `app/Services/EmailVerificationService.php`, `config/app.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php`, `.env.example`, `tests/Feature/EmailVerificationTest.php`, `context/api_contracts.md`, `context/data_dictionary.md`
@@ -353,11 +353,11 @@
     - [ ] Valide com `dig MX assin.art` e envio de e-mail externo real para `sac@assin.art`.
   - **Critério de aceite:** E-mail enviado para `sac@assin.art` chega à caixa do Gmail pessoal sem erro de DNS/SPF.
 
-- [ ] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`) (`FLUXO E` — aguarda daemon Docker ativo)**
-  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/entrypoint.sh`, `docker/azure-sim/compose.yml`, `.dockerignore`, `scripts/load-test-azure-sim.sh`, `tests/Feature/AzureSimContainerConfigTest.php`, `context/DEPLOY_PLAN.md`
+- [x] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`)**
+  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/entrypoint.sh`, `docker/azure-sim/compose.yml`, `.dockerignore`, `scripts/load-test-azure-sim.sh`, `tests/Feature/AzureSimContainerConfigTest.php`, `composer.json`, `composer.lock`, `context/DEPLOY_PLAN.md`
   - **Escopo:**
     - [x] Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx reproduzindo `azure/nginx.conf`, `public/.user.ini` e o boot equivalente ao `azure/startup.sh`.
     - [x] Crie `docker/azure-sim/compose.yml` com limites do SKU `B1` (`1.0` vCPU, `1792 MB` RAM, 1 instância) e volume persistente em `/home/data` (com modo SQLite `WAL` e profile `postgres`).
     - [x] Crie `scripts/load-test-azure-sim.sh` para carga concorrente simultânea em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
-    - [ ] Execute a bateria ao vivo no Docker (`docker.service` ativo) e registre p50/p95, taxa de erro e o gatilho empírico de migração para `API-12` (PostgreSQL) em `context/DEPLOY_PLAN.md`.
+    - [x] Execute a bateria ao vivo no Docker (`1.0 vCPU / 1792 MB`, `20 VUs x 20s`) para SQLite `WAL` (`1829/1829` OK, `0` locks, `p95=387.27ms`) e PostgreSQL 16 (`1316/1316` OK, `p95=397.67ms`), fixando `platform.php = 8.3.0` em `composer.json`/`composer.lock` e registrando os dados em `context/DEPLOY_PLAN.md`.
   - **Critério de aceite:** Ambiente limitado a `1 vCPU / 1,75 GB` sobe com os mesmos configs do `azure/` e conclui carga concorrente registrando latência, `0` erros `5xx` e evidência sobre locks do SQLite vs PostgreSQL.

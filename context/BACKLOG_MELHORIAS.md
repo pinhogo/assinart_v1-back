@@ -1780,7 +1780,7 @@
 
 ---
 
-## ✉️ Confirmação de E-mail, Contato e Carga Containerizada (`API-20..21 DONE` | `API-22..23 FLUXO E`)
+## ✉️ Confirmação de E-mail, Contato e Carga Containerizada (`API-20`, `API-21`, `API-23` `DONE` | `API-22` `FLUXO E`)
 
 ### [API-20] Enviar E-mail de Confirmação Real e Validar o Token em /auth/email/verify
 
@@ -1890,8 +1890,8 @@
 
 ### [API-23] Simular Teste de Carga Local em Container com Limites do Azure App Service (B1)
 
-- **Estado no Backlog:** Infraestrutura de simulação integrada (`0905945` em `develop`); aguardando inicialização de `docker.socket`/`docker.service` para executar ao vivo (`API-23.5`)
-- **GitHub Project (#2):** Status `TESTES, PLAYGROUND E DOCUMENTAÇÃO - FLUXO E` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/20)
+- **Estado no Backlog:** Concluída (`0905945` + execução ao vivo `sqlite` `1829/1829` e `pgsql` `1316/1316` com `0` erros/`0` locks e fix `platform.php=8.3.0` em `composer.json`/`composer.lock`)
+- **GitHub Project (#2):** Status `DONE` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/20)
 
 **Contexto Bruto:**
 

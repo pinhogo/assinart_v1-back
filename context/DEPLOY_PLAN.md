@@ -314,9 +314,21 @@ Executar em **aba anônima** (sem cache ou sessão prévia):
 
 ## 8. Simulação Local Azure `B1` e Benchmark SQLite `WAL` vs PostgreSQL (`API-23`)
 
-> **Status de execução na criação (`2026-11-16`):** O daemon Docker (`dockerd` em `/var/run/docker.sock`) não estava ativo nesta sessão de trabalho. Nenhum número de carga foi fabricado; execute os comandos abaixo assim que iniciar o daemon Docker para coletar as métricas reais no hardware alvo.
+> **Status de execução (`2026-11-16` — Concluída):** Container `assinart-azure-sim:latest` (`php:8.3-fpm` + `nginx`, limites `1.0 vCPU` / `1792 MB` RAM) compilado e executado ao vivo com `./scripts/load-test-azure-sim.sh` (`20 VUs x 20s`, executor `php`) para **SQLite `WAL`** e **PostgreSQL 16**. A simulação em PHP 8.3 também revelou e corrigiu o lock do `composer.lock` gerado no PHP 8.5 (`symfony/* v8.1` incompatível com PHP 8.3 no Azure/CI), fixando `config.platform.php = "8.3.0"` em `composer.json`.
 
-### 8.1 Artefatos do ambiente de simulação
+### 8.1 Resultados Medidos no Container Limitado (`1.0 vCPU / 1792 MB` — `20 VUs x 20s`)
+
+| Modo de Banco | Total Req | Sucessos (`2xx/3xx`) | Erros `5xx` / Timeout | `database is locked` | `p50` Global | `p95` Global | Memória Container `app` |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **SQLite `WAL`** (`busy_timeout=5000`) | `1829` | `1829` (`100%`) | `0` (`0.00%`) | `0` | `200.84 ms` | `387.27 ms` | `54.6 MiB` (`3.05%`) |
+| **PostgreSQL 16** (`postgres:16-alpine`) | `1316` | `1316` (`100%`) | `0` (`0.00%`) | `0` | `303.91 ms` | `397.67 ms` | `56.45 MiB` (`3.15%`) |
+
+- **Detalhe por endpoint (`p50` / `p95`):**
+  - **SQLite `WAL`:** `POST /api/v1/track` (`209.09 / 391.36 ms`), `GET /r/{id}` (`215.79 / 398.87 ms`), `GET /{username}` (`196.54 / 382.97 ms`), `GET /up` (`191.37 / 303.14 ms`).
+  - **PostgreSQL 16:** `POST /api/v1/track` (`312.09 / 398.88 ms`), `GET /r/{id}` (`320.88 / 401.82 ms`), `GET /{username}` (`311.46 / 398.38 ms`), `GET /up` (`275.34 / 306.18 ms`).
+- **Ressalva de produção Azure:** em disco Linux local do container, SQLite `WAL` suportou `~91 req/s` com `0` locks e `p95 < 400 ms`; em produção no App Service Linux, `/home/data` roda sobre montagem **SMB/CIFS**, que possui latência de I/O maior que disco local — mantenha o gatilho da seção `8.4` para virar para `DB_CONNECTION=pgsql` (`API-12`) imediatamente caso surja `database is locked` ou `p95 > 500 ms` em produção.
+
+### 8.2 Artefatos do ambiente de simulação
 - [`docker/azure-sim/Dockerfile`](../docker/azure-sim/Dockerfile): imagem `php:8.3-fpm` + `nginx` com `mbstring`, `fileinfo`, `pdo_sqlite`, `pdo_pgsql`, `gd`, `zip` e `opcache`, copiando `azure/nginx.conf` (porta `8080`, `fastcgi_pass 127.0.0.1:9000`) e `public/.user.ini` (`PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d`).
 - [`docker/azure-sim/entrypoint.sh`](../docker/azure-sim/entrypoint.sh): prepara `/home/data/storage/app/public/{avatars,covers,cards,wallpapers}` e `/home/data/backups`, aguarda PostgreSQL quando `DB_CONNECTION=pgsql`, executa `azure/startup.sh`, ajusta permissões `www-data` e inicia `php-fpm` + `nginx`.
 - [`docker/azure-sim/compose.yml`](../docker/azure-sim/compose.yml): define os limites do SKU `B1` (`cpus: 1.0`, `mem_limit: 1792m` / `deploy.resources.limits`), volume persistente `/home/data`, flags SQLite (`DB_SQLITE_JOURNAL_MODE=WAL`, `DB_SQLITE_BUSY_TIMEOUT=5000`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`) e profile opcional `postgres` (`postgres:16-alpine` com healthcheck).

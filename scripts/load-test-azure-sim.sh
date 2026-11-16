@@ -272,8 +272,8 @@ $artist = App\Models\Artist::updateOrCreate(
     ]
 );
 
-$button = App\Models\Button::updateOrCreate(
-    ["artist_id" => $artist->id, "title" => "Load Test Portfolio"],
+$button = $artist->buttons()->updateOrCreate(
+    ["title" => "Load Test Portfolio"],
     [
         "url" => "https://assin.art",
         "platform" => "custom",
