@@ -23,15 +23,39 @@ class DatabaseProductionConfigTest extends TestCase
     {
         $previous = [];
         foreach ($env as $key => $value) {
-            $previous[$key] = getenv($key);
-            $value === null ? putenv($key) : putenv("{$key}={$value}");
+            $previous[$key] = [
+                'getenv' => getenv($key),
+                'env_exists' => array_key_exists($key, $_ENV),
+                'env' => $_ENV[$key] ?? null,
+                'server_exists' => array_key_exists($key, $_SERVER),
+                'server' => $_SERVER[$key] ?? null,
+            ];
+
+            if ($value === null) {
+                putenv($key);
+                unset($_ENV[$key], $_SERVER[$key]);
+            } else {
+                putenv("{$key}={$value}");
+                $_ENV[$key] = $value;
+                $_SERVER[$key] = $value;
+            }
         }
 
         try {
             return require config_path('database.php');
         } finally {
-            foreach ($previous as $key => $value) {
-                $value === false ? putenv($key) : putenv("{$key}={$value}");
+            foreach ($previous as $key => $orig) {
+                $orig['getenv'] === false ? putenv($key) : putenv("{$key}={$orig['getenv']}");
+                if ($orig['env_exists']) {
+                    $_ENV[$key] = $orig['env'];
+                } else {
+                    unset($_ENV[$key]);
+                }
+                if ($orig['server_exists']) {
+                    $_SERVER[$key] = $orig['server'];
+                } else {
+                    unset($_SERVER[$key]);
+                }
             }
         }
     }
