@@ -26,4 +26,5 @@ Route::get('/r/{id}', [RedirectController::class, 'redirect'])
 // Slugs reservados vêm de App\Support\ReservedUsernames (fonte única) e não colidem com rotas do sistema
 Route::get('/{username}', [PublicProfileController::class, 'show'])
     ->name('artist.public')
+    ->middleware('throttle:60,1')
     ->where('username', ReservedUsernames::routePattern());
