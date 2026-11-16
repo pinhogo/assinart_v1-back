@@ -307,4 +307,84 @@ class MediaStorageTest extends TestCase
 
         $response->assertStatus(404);
     }
+
+    private const AZURE_BASE = 'https://assinart.blob.core.windows.net/media/';
+
+    private function useAzureDisk(): void
+    {
+        config(['filesystems.media_disk' => 'azure']);
+        Storage::fake('azure');
+    }
+
+    public function test_azure_disk_uploads_and_replaces_media_without_orphans(): void
+    {
+        $this->useAzureDisk();
+        $artist = Artist::factory()->create();
+
+        $first = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/profile/avatar', ['avatar' => UploadedFile::fake()->create('a.png', 100, 'image/png')])
+            ->assertStatus(200);
+        $firstPath = 'avatars/' . basename($first->json('avatar_url'));
+        Storage::disk('azure')->assertExists($firstPath);
+        Storage::disk('public')->assertMissing($firstPath);
+
+        $second = $this->actingAs($artist->fresh(), 'sanctum')
+            ->postJson('/api/v1/profile/avatar', ['avatar' => UploadedFile::fake()->create('b.png', 100, 'image/png')])
+            ->assertStatus(200);
+        $secondPath = 'avatars/' . basename($second->json('avatar_url'));
+
+        Storage::disk('azure')->assertMissing($firstPath);
+        Storage::disk('azure')->assertExists($secondPath);
+        $this->assertCount(1, Storage::disk('azure')->allFiles('avatars'));
+    }
+
+    public function test_azure_blob_urls_are_extracted_and_deleted_for_profile_media(): void
+    {
+        $this->useAzureDisk();
+        $disk = Storage::disk('azure');
+        $disk->put('avatars/a.png', 'x');
+        $disk->put('covers/c.png', 'x');
+        $disk->put('wallpapers/w.png', 'x');
+        $artist = Artist::factory()->create([
+            'avatar_url' => self::AZURE_BASE . 'avatars/a.png',
+            'cover_url' => self::AZURE_BASE . 'covers/c.png',
+            'wallpaper_url' => self::AZURE_BASE . 'wallpapers/w.png',
+        ]);
+
+        $this->actingAs($artist, 'sanctum')->deleteJson('/api/v1/profile/avatar')->assertStatus(200);
+        $this->actingAs($artist, 'sanctum')->deleteJson('/api/v1/profile/cover')->assertStatus(200);
+        $this->actingAs($artist, 'sanctum')->deleteJson('/api/v1/profile/background')->assertStatus(200);
+
+        $disk->assertMissing('avatars/a.png');
+        $disk->assertMissing('covers/c.png');
+        $disk->assertMissing('wallpapers/w.png');
+    }
+
+    public function test_azure_blob_urls_are_deleted_for_buttons_and_legacy_local_urls_fall_back_to_public(): void
+    {
+        $this->useAzureDisk();
+        Storage::disk('azure')->put('cards/one.png', 'x');
+        Storage::disk('azure')->put('cards/two.png', 'x');
+        Storage::disk('public')->put('cards/legacy.png', 'x');
+        $artist = Artist::factory()->create();
+        $one = Button::factory()->create(['artist_id' => $artist->id, 'image_url' => self::AZURE_BASE . 'cards/one.png']);
+        Button::factory()->create(['artist_id' => $artist->id, 'image_url' => self::AZURE_BASE . 'cards/two.png']);
+        Button::factory()->create(['artist_id' => $artist->id, 'image_url' => 'http://localhost/storage/cards/legacy.png']);
+
+        $this->actingAs($artist, 'sanctum')->deleteJson("/api/v1/buttons/{$one->id}")->assertStatus(200);
+        Storage::disk('azure')->assertMissing('cards/one.png');
+
+        $this->actingAs($artist, 'sanctum')->deleteJson('/api/v1/buttons')->assertStatus(200);
+        Storage::disk('azure')->assertMissing('cards/two.png');
+        Storage::disk('public')->assertMissing('cards/legacy.png');
+    }
+
+    public function test_azure_media_urls_are_accepted_in_profile_update(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', ['wallpaper_url' => self::AZURE_BASE . 'wallpapers/w.png'])
+            ->assertStatus(200);
+    }
 }

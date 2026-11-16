@@ -49,7 +49,7 @@ class UpdateProfileRequest extends FormRequest
             'cover_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
             'background_color' => 'nullable|string|max:20',
             'background_id' => 'nullable|string|max:50',
-            'wallpaper_url' => 'nullable|string|max:2048',
+            'wallpaper_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
             'wallpaper_repeat' => 'nullable|boolean',
             'wallpaper_preset_id' => 'nullable|string|max:50',
             'cover_color' => 'nullable|string|max:20',

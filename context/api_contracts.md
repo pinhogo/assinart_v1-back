@@ -253,6 +253,14 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 - **Acesso:** Bearer Token.
 - **Resposta de Sucesso (200 OK):** Reverte o fundo para cor sólida padrão `#FFFFFF`.
 
+### 5.7 Disco de Mídia e Azure Blob Storage (`MEDIA_DISK`)
+- **Variável `MEDIA_DISK`:** Define o disco que guarda todas as mídias (avatar, capa, plano de fundo e imagem de card). Use `public` em desenvolvimento e teste. Use `azure` em produção.
+- **Formato da URL no Azure:** `https://<account>.blob.core.windows.net/<container>/<pasta>/<arquivo>`. A pasta é `avatars`, `covers`, `wallpapers` ou `cards`.
+- **Acesso público:** O container do Azure DEVE permitir leitura pública dos blobs. O navegador carrega as imagens direto da URL.
+- **CORS:** Configure o CORS no Azure Blob Storage para a origem `https://assin.art`. Permita os métodos `GET` e `HEAD`.
+- **Exclusão:** A API extrai o caminho relativo da URL salva e remove o arquivo do disco ativo. A API também remove URLs antigas `/storage/...` do disco `public`.
+- **Validação:** Os campos `avatar_url`, `cover_url` e `wallpaper_url` aceitam URL `http(s)` com até 4096 caracteres.
+
 ---
 
 ## 6. Gestão de Botões e Links (`/api/v1/buttons`)

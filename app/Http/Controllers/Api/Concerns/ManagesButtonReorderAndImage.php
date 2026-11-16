@@ -8,10 +8,11 @@ use App\Services\ButtonOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 trait ManagesButtonReorderAndImage
 {
+    use InteractsWithMediaStorage;
+
     /**
      * Reordena os botões do artista autenticado em transação atômica com normalização por seção.
      */
@@ -88,21 +89,11 @@ trait ManagesButtonReorderAndImage
             'image.max' => 'A imagem não pode exceder 5MB.',
         ]);
 
-        if ($button->image_url) {
-            $parsedPath = parse_url($button->image_url, PHP_URL_PATH) ?? $button->image_url;
-            $oldPath = ltrim(str_replace('/storage/', '', $parsedPath), '/');
-            if (str_starts_with($oldPath, 'storage/')) {
-                $oldPath = substr($oldPath, 8);
-            }
-            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                Storage::disk('public')->delete($oldPath);
-            }
-        }
-
-        $path = $request->file('image')->store('cards', 'public');
+        $this->deleteFileFromStorage($button->image_url);
+        $imageUrl = $this->storeMediaFile($request->file('image'), 'cards');
 
         $button->update([
-            'image_url' => Storage::url($path),
+            'image_url' => $imageUrl,
         ]);
 
         return response()->json([

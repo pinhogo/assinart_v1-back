@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'media_disk' => env('MEDIA_DISK', env('FILESYSTEM_DISK', 'public')),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -29,6 +31,22 @@ return [
     */
 
     'disks' => [
+
+        'azure' => [
+            'driver' => 'azure-storage-blob',
+            'connection_string' => env('AZURE_STORAGE_CONNECTION_STRING', sprintf(
+                'DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=%s',
+                (string) env('AZURE_STORAGE_NAME', env('AZURE_STORAGE_ACCOUNT', '')),
+                (string) env('AZURE_STORAGE_KEY', ''),
+                (string) env('AZURE_STORAGE_ENDPOINT_SUFFIX', 'core.windows.net'),
+            )),
+            'container' => env('AZURE_STORAGE_CONTAINER', 'media'),
+            'url' => env('AZURE_STORAGE_URL'),
+            'endpoint' => env('AZURE_STORAGE_ENDPOINT'),
+            'prefix' => env('AZURE_STORAGE_PREFIX', ''),
+            'visibility' => 'public',
+            'throw' => false,
+        ],
 
         'local' => [
             'driver' => 'local',
