@@ -383,7 +383,7 @@ Adote **PostgreSQL gerenciado (`API-12`)** imediatamente antes da abertura públ
 ## 9. E-mail Gratuito do Domínio `assin.art` na Hostinger — Recebimento e Envio (`API-22`)
 
 > **Premissa:** O domínio `assin.art` está registrado e hospedado na **Hostinger** sem plano de e-mail incluso.
-> **Regra de fechamento:** A task `API-22` **NÃO avança para `DONE`** enquanto o proprietário não concluir a configuração no painel DNS da Hostinger (`API-22.1..22.4`) e o teste real de recebimento (`API-22.7`).
+> **Regra de fechamento:** Concluída (`2026-11-16`) via **ImprovMX** (encaminhamento gratuito `sac@assin.art` e `contato@assin.art` -> Gmail pessoal) + **Brevo** (`smtp-relay.brevo.com:587`, `DKIM`/`DMARC`/`SPF` combinado no DNS da Hostinger e `MAIL_MAILER=smtp` no Azure).
 > **Segurança:** Nunca grave o endereço Gmail pessoal de destino em arquivos do repositório, commits ou logs.
 
 ### 9.1 Endereços oficiais configurados no backend (`API-22.5`)
@@ -482,23 +482,12 @@ Publique os registros abaixo no painel DNS ativo (**Hostinger** na Opção A ou 
    ```
    *(No Azure App Settings, informe `Assinart` literalmente em `MAIL_FROM_NAME` e `MAIL_REPLY_TO_NAME`, pois variáveis de ambiente do sistema não expandem `${APP_NAME}` como o parser `.env`.)*
 
-### 9.5 Checklist manual pós-DNS (`API-22.1..22.4` e `API-22.7` — Proprietário)
+### 9.5 Checklist manual pós-DNS (`API-22.1..22.4` e `API-22.7` — Concluído em 2026-11-16)
 
-> **Importante:** Conclua todos os itens abaixo antes de mover `API-22` para `DONE`.
+> **Status:** Validado via `dig @1.1.1.1` + Azure App Settings (`MAIL_MAILER=smtp`) + teste real de recebimento no Gmail pessoal.
 
-- [ ] **API-22.1:** Escolher Opção A (ImprovMX direto no DNS da Hostinger) ou Opção B (migrar nameservers para Cloudflare + Email Routing), preservando `A`/`AAAA`/`CNAME` do GitHub Pages, e verificar o Gmail pessoal apenas no painel.
-- [ ] **API-22.2:** Criar aliases/regras `sac@assin.art` e `contato@assin.art` apontando para o Gmail pessoal verificado.
-- [ ] **API-22.3:** Validar domínio no provedor transacional (**Resend** ou **Brevo**) com `DKIM`, `SPF` único combinado e `DMARC`.
-- [ ] **API-22.4:** Configurar `MAIL_MAILER=smtp` e credenciais reais apenas via Azure Portal / `az webapp config appsettings set`.
-- [ ] **API-22.7:** Executar validação externa pós-propagação DNS e confirmar recebimento real:
-  ```bash
-  dig +short MX assin.art
-  dig +short TXT assin.art
-  dig +short TXT _dmarc.assin.art
-  dig +short A assin.art
-  dig +short CNAME www.assin.art
-  ```
-  - Confirmar que os registros `A` e `CNAME` (`www` -> `pinhogo.github.io`) do GitHub Pages continuam intactos.
-  - Confirmar apenas um registro `TXT` começando com `v=spf1` em `assin.art`.
-  - Enviar e-mail externo para `sac@assin.art` e confirmar entrega no Gmail pessoal.
-  - Enviar e-mail externo para `contato@assin.art` e confirmar entrega no Gmail pessoal.
+- [x] **API-22.1:** Opção A (**ImprovMX** direto no DNS da Hostinger) configurada preservando `A`/`AAAA`/`CNAME` do GitHub Pages, com Gmail pessoal verificado apenas no painel.
+- [x] **API-22.2:** Aliases `sac@assin.art` e `contato@assin.art` ativos apontando para o Gmail pessoal verificado (`10 mx1.improvmx.com.` / `20 mx2.improvmx.com.`).
+- [x] **API-22.3:** Domínio `assin.art` autenticado no **Brevo** com `DKIM` (`brevo1._domainkey` / `brevo2._domainkey`), `SPF` único combinado (`v=spf1 include:spf.improvmx.com include:spf.brevo.com ~all`) e `DMARC` (`_dmarc`).
+- [x] **API-22.4:** `MAIL_MAILER=smtp`, `MAIL_HOST=smtp-relay.brevo.com`, `MAIL_PORT=587`, `MAIL_ENCRYPTION=tls` e credenciais configuradas apenas via Azure App Settings.
+- [x] **API-22.7:** Propagação validada externamente via `dig` e recebimento real confirmado pelo proprietário em `sac@assin.art` e `contato@assin.art`.

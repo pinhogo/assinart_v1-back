@@ -320,10 +320,10 @@
 
 ---
 
-## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20`, `API-21`, `API-23` `DONE`; `API-22` `FLUXO E`)
+## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20`, `API-21`, `API-22`, `API-23` `DONE`)
 
 > Origem: `context/BACKLOG_MELHORIAS.md` (`API-20`, `API-21`, `API-22`, `API-23`) e `assinart_v1/context/BACKLOG_MELHORIAS.md` (`CAD-11`, `FIX-GLB-22`).
-> Executado via Orca (`run_58b77ee84902`). `API-20`, `API-21` e `API-23` concluídas em `DONE`; `API-22` segue em `FLUXO E` aguardando configuração DNS na Hostinger.
+> Executado via Orca (`run_58b77ee84902`). Todas as entregas (`API-20`, `API-21`, `API-22`, `API-23`, `CAD-11`, `FIX-GLB-22`) concluídas em `DONE`.
 
 - [x] **Task 10.1 (`#3` / `API-20`): E-mail de Confirmação Real e Validação de Token**
   - **Arquivos:** `database/migrations/2026_11_16_000001_create_email_verification_tokens_table.php`, `app/Mail/VerifyEmailMail.php`, `resources/views/emails/verify-email.blade.php`, `app/Services/EmailVerificationService.php`, `config/app.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php`, `.env.example`, `tests/Feature/EmailVerificationTest.php`, `context/api_contracts.md`, `context/data_dictionary.md`
@@ -344,13 +344,13 @@
     - [x] Cubra o bloqueio e a liberação pós-verificação em `ProfilePublicationTest.php`.
   - **Critério de aceite:** Conta não verificada recebe `422` ao tentar publicar e `200` após confirmar o e-mail. (`454 passed, 3 skipped`).
 
-- [ ] **Task 10.3 (`#4` / `API-22`): Roteamento de `sac@assin.art` e `contato@assin.art` para Gmail Pessoal (`FLUXO E` — aguarda painel Hostinger)**
+- [x] **Task 10.3 (`#4` / `API-22`): Roteamento de `sac@assin.art` e `contato@assin.art` para Gmail Pessoal (`DONE`)**
   - **Arquivos:** `.env.example`, `azure/appsettings.example.env`, `config/mail.php`, `tests/Feature/MailConfigTest.php`, `context/DEPLOY_PLAN.md`
   - **Escopo:**
-    - [ ] Configure Cloudflare Email Routing ou ImprovMX na Hostinger para `sac@assin.art` e `contato@assin.art` encaminhando ao Gmail pessoal (sem commitar o Gmail no Git).
-    - [ ] Publique `MX`, `SPF`, `DKIM` e `DMARC` no DNS de `assin.art` (Hostinger) alinhados ao provedor transacional de `API-20`.
+    - [x] Configure **ImprovMX** no DNS da Hostinger para `sac@assin.art` e `contato@assin.art` encaminhando ao Gmail pessoal (sem commitar o Gmail no Git).
+    - [x] Publique `MX`, `SPF` combinado (`include:spf.improvmx.com include:spf.brevo.com`), `DKIM` e `DMARC` no DNS de `assin.art` alinhados ao **Brevo** (`smtp-relay.brevo.com:587`) + Azure App Settings.
     - [x] Alinhe `MAIL_FROM_ADDRESS` e `MAIL_REPLY_TO_ADDRESS` em `.env.example`/`config/mail.php` e documente o passo a passo gratuito para Hostinger em `context/DEPLOY_PLAN.md`.
-    - [ ] Valide com `dig MX assin.art` e envio de e-mail externo real para `sac@assin.art`.
+    - [x] Valide com `dig @1.1.1.1` e envio/recebimento real confirmado pelo proprietário em `sac@assin.art` e `contato@assin.art`.
   - **Critério de aceite:** E-mail enviado para `sac@assin.art` chega à caixa do Gmail pessoal sem erro de DNS/SPF.
 
 - [x] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`)**

@@ -1780,7 +1780,7 @@
 
 ---
 
-## ✉️ Confirmação de E-mail, Contato e Carga Containerizada (`API-20`, `API-21`, `API-23` `DONE` | `API-22` `FLUXO E`)
+## ✉️ Confirmação de E-mail, Contato e Carga Containerizada (`API-20`, `API-21`, `API-22`, `API-23` `DONE`)
 
 ### [API-20] Enviar E-mail de Confirmação Real e Validar o Token em /auth/email/verify
 
@@ -1847,8 +1847,8 @@
 
 ### [API-22] Ativar E-mail de Contato (`sac@assin.art`) com Encaminhamento para Gmail Pessoal
 
-- **Estado no Backlog:** Preparação versionável integrada (`763d540` em `develop`); aguardando configuração manual de DNS na **Hostinger** e validação de entrega no Gmail (`API-22.1..22.4`, `API-22.7`)
-- **GitHub Project (#2):** Status `TESTES, PLAYGROUND E DOCUMENTAÇÃO - FLUXO E` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/4)
+- **Estado no Backlog:** Concluída (`763d540` em `develop` + DNS Hostinger/ImprovMX + Brevo SMTP configurados e recebimento validado pelo proprietário)
+- **GitHub Project (#2):** Status `DONE` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/4)
 
 **Contexto Bruto:**
 
