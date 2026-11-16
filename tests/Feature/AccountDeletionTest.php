@@ -100,4 +100,30 @@ class AccountDeletionTest extends TestCase
         Storage::disk('public')->assertMissing($wallpaperPath);
         Storage::disk('public')->assertMissing($cardPath);
     }
+
+    public function test_deletes_azure_blob_files_when_account_is_deleted(): void
+    {
+        config(['filesystems.media_disk' => 'azure']);
+        Storage::fake('azure');
+        $base = 'https://assinart.blob.core.windows.net/media/';
+        foreach (['avatars/a.png', 'covers/c.png', 'wallpapers/w.png', 'cards/k.png'] as $path) {
+            Storage::disk('azure')->put($path, 'x');
+        }
+
+        $artist = Artist::factory()->create([
+            'password' => Hash::make('secret123'),
+            'avatar_url' => $base . 'avatars/a.png',
+            'cover_url' => $base . 'covers/c.png',
+            'wallpaper_url' => $base . 'wallpapers/w.png',
+        ]);
+        Button::factory()->create(['artist_id' => $artist->id, 'image_url' => $base . 'cards/k.png']);
+
+        $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/auth/account/delete', ['password' => 'secret123'])
+            ->assertStatus(200);
+
+        foreach (['avatars/a.png', 'covers/c.png', 'wallpapers/w.png', 'cards/k.png'] as $path) {
+            Storage::disk('azure')->assertMissing($path);
+        }
+    }
 }

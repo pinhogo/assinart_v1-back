@@ -194,4 +194,24 @@ class BackgroundMediaTest extends TestCase
         $xssResponse->assertStatus(422)
             ->assertJsonValidationErrors(['avatar_url']);
     }
+
+    public function test_azure_disk_upload_and_replace_background_leaves_no_orphans(): void
+    {
+        config(['filesystems.media_disk' => 'azure']);
+        Storage::fake('azure');
+        $artist = Artist::factory()->create([
+            'wallpaper_url' => 'https://assinart.blob.core.windows.net/media/wallpapers/old.png',
+        ]);
+        Storage::disk('azure')->put('wallpapers/old.png', 'x');
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/profile/background', [
+                'background' => UploadedFile::fake()->create('bg.png', 100, 'image/png'),
+            ])
+            ->assertStatus(200);
+
+        Storage::disk('azure')->assertMissing('wallpapers/old.png');
+        Storage::disk('azure')->assertExists('wallpapers/' . basename($response->json('wallpaper_url')));
+        $this->assertCount(1, Storage::disk('azure')->allFiles('wallpapers'));
+    }
 }
