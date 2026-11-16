@@ -364,3 +364,128 @@ Adote **PostgreSQL gerenciado (`API-12`)** imediatamente antes da abertura públ
 | Latência `p95` (`POST /api/v1/track` ou `GET /r/{id}`) | `<= 500 ms` | `> 500 ms` sustentado |
 | Tamanho do arquivo `database.sqlite` | `<= 100 MB` | `> 100 MB` |
 | Escala de instâncias / workers no App Service | `1` instância | Necessidade de `workers > 1` ou scale-out horizontal |
+
+---
+
+## 9. E-mail Gratuito do Domínio `assin.art` na Hostinger — Recebimento e Envio (`API-22`)
+
+> **Premissa:** O domínio `assin.art` está registrado e hospedado na **Hostinger** sem plano de e-mail incluso.
+> **Regra de fechamento:** A task `API-22` **NÃO avança para `DONE`** enquanto o proprietário não concluir a configuração no painel DNS da Hostinger (`API-22.1..22.4`) e o teste real de recebimento (`API-22.7`).
+> **Segurança:** Nunca grave o endereço Gmail pessoal de destino em arquivos do repositório, commits ou logs.
+
+### 9.1 Endereços oficiais configurados no backend (`API-22.5`)
+
+- **Remetente (`MAIL_FROM_ADDRESS`):** `contato@assin.art` (`MAIL_FROM_NAME="${APP_NAME}"`).
+- **Resposta (`MAIL_REPLY_TO_ADDRESS`):** `sac@assin.art` (`MAIL_REPLY_TO_NAME="${APP_NAME}"`).
+- **Configuração versionada:** `.env.example`, `azure/appsettings.example.env` e `config/mail.php` (lê `MAIL_REPLY_TO_ADDRESS` e `MAIL_REPLY_TO_NAME` do ambiente quando definidos).
+
+### 9.2 Preservação obrigatória do GitHub Pages no DNS da Hostinger
+
+Antes de alterar qualquer registro de e-mail no **hPanel da Hostinger** (**Domínios > assin.art > DNS / Nameservers**), confirme e **NÃO apague** os registros que mantêm o site no ar no GitHub Pages:
+
+- Registros `A` do apex `@` (`assin.art`): `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`.
+- Registros `AAAA` do apex `@` (se configurados para GitHub Pages): `2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153`, `2606:50c0:8003::153`.
+- Registro `CNAME` de `www`: `pinhogo.github.io`.
+
+### 9.3 Recebimento gratuito (`sac@assin.art` e `contato@assin.art` -> Gmail pessoal)
+
+#### Opção A — Direto no DNS da Hostinger via ImprovMX gratuito (sem trocar nameservers)
+
+1. Crie a conta gratuita no painel do **ImprovMX** para o domínio `assin.art`.
+2. Informe o endereço Gmail pessoal de destino apenas no painel do ImprovMX.
+3. Abra o e-mail de confirmação recebido no Gmail pessoal e clique no link de verificação.
+4. No painel do ImprovMX, crie os aliases `sac@assin.art` e `contato@assin.art` apontando para o Gmail pessoal verificado.
+5. Abra o **hPanel da Hostinger** (**Domínios > assin.art > DNS / Nameservers > Gerenciar registros DNS**).
+6. Mantenha intactos todos os registros `A`, `AAAA` e `CNAME` (`www` -> `pinhogo.github.io`) do GitHub Pages.
+7. Remova apenas registros `MX` antigos da Hostinger, se existirem, e adicione os dois registros `MX` no host `@`:
+   - `MX` | Nome: `@` | Aponta para: `mx1.improvmx.com` | Prioridade: `10`
+   - `MX` | Nome: `@` | Aponta para: `mx2.improvmx.com` | Prioridade: `20`
+8. Publique o registro `SPF` combinado único no host `@` conforme a Seção 9.4.
+
+#### Opção B — Migrar nameservers da Hostinger para Cloudflare gratuito + Cloudflare Email Routing
+
+1. Crie uma conta gratuita na **Cloudflare** e adicione o site `assin.art` no plano **Free**.
+2. Revise a importação automática de DNS na Cloudflare e confirme que **todos os registros `A`, `AAAA` e `CNAME` (`www` -> `pinhogo.github.io`) do GitHub Pages** constam na zona.
+3. Mantenha os registros `A`, `AAAA` e `CNAME` do GitHub Pages em modo **DNS only (nuvem cinza)** para preservar a renovação automática de TLS do GitHub Pages.
+4. No **hPanel da Hostinger** (**Domínios > assin.art > DNS / Nameservers > Alterar nameservers**), substitua os nameservers da Hostinger pelos dois nameservers informados pela Cloudflare.
+5. Aguarde a ativação da zona na Cloudflare e abra **Email > Email Routing > Destination addresses**.
+6. Cadastre o endereço Gmail pessoal apenas no painel da Cloudflare e clique no link de verificação recebido no Gmail.
+7. Crie duas **Routing rules** em **Email Routing**: `sac@assin.art` -> Gmail pessoal verificado e `contato@assin.art` -> Gmail pessoal verificado.
+8. Ative o roteamento para a Cloudflare publicar os registros `MX` (`route1.mx.cloudflare.net`, `route2.mx.cloudflare.net` e `route3.mx.cloudflare.net` com as prioridades exibidas no painel).
+
+#### Verificação dos registros `MX` após propagação
+
+```bash
+dig +short MX assin.art
+```
+
+### 9.4 Envio transacional gratuito (`API-20` no Azure) + DKIM / SPF combinado / DMARC
+
+| Provedor | Cota gratuita | Configuração SMTP no Azure | Registros DNS exigidos |
+| :--- | :--- | :--- | :--- |
+| **Resend** | `3.000` e-mails/mês (`100`/dia) | `MAIL_MAILER=smtp`, `MAIL_HOST=smtp.resend.com`, `MAIL_PORT=587`, `MAIL_USERNAME=resend`, `MAIL_PASSWORD=<API_KEY>`, `MAIL_ENCRYPTION=tls` | `DKIM` (`TXT`), `SPF` (`TXT` no subdomínio de envio ou raiz) e `DMARC` (`TXT`) |
+| **Brevo** | `300` e-mails/dia (`~9.000`/mês) | `MAIL_MAILER=smtp`, `MAIL_HOST=smtp-relay.brevo.com`, `MAIL_PORT=587`, `MAIL_USERNAME=<SMTP_LOGIN>`, `MAIL_PASSWORD=<SMTP_KEY>`, `MAIL_ENCRYPTION=tls` | `DKIM` (`TXT`), `SPF` (`TXT`) e `DMARC` (`TXT`) |
+
+Publique os registros abaixo no painel DNS ativo (**Hostinger** na Opção A ou **Cloudflare** na Opção B):
+
+1. Cadastre `assin.art` no provedor escolhido (**Resend** ou **Brevo**) e publique os registros `DKIM` gerados pelo provedor.
+2. Publique **exatamente um único registro `TXT` `SPF` no apex (`@` / `assin.art`)** (RFC 7208 proíbe múltiplos registros `v=spf1` e gera `PermError`). Combine todos os `include:` na mesma linha:
+   - **Opção A (Hostinger + ImprovMX) + Brevo:**
+     ```text
+     v=spf1 include:spf.improvmx.com include:spf.brevo.com ~all
+     ```
+   - **Opção A (Hostinger + ImprovMX) + Resend (quando usar SPF no apex):**
+     ```text
+     v=spf1 include:spf.improvmx.com include:amazonses.com ~all
+     ```
+     *(Se o painel do Resend usar o subdomínio dedicado `send.assin.art` para SPF, mantenha `v=spf1 include:spf.improvmx.com ~all` no apex `@` e publique o `TXT` do Resend no host `send`.)*
+   - **Opção B (Cloudflare Email Routing) + Brevo:**
+     ```text
+     v=spf1 include:_spf.mx.cloudflare.net include:spf.brevo.com ~all
+     ```
+   - **Opção B (Cloudflare Email Routing) + Resend (quando usar SPF no apex):**
+     ```text
+     v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all
+     ```
+     *(Se o Resend usar o subdomínio dedicado `send`, mantenha `v=spf1 include:_spf.mx.cloudflare.net ~all` no apex `@` e publique o `TXT` do Resend no host `send`.)*
+3. Publique o registro `DMARC` no host `_dmarc` (`TXT`):
+   ```text
+   v=DMARC1; p=none; rua=mailto:sac@assin.art; fo=1
+   ```
+   *(Após confirmar entrega estável em produção, evolua `p=none` para `p=quarantine` ou `p=reject`.)*
+4. Grave as credenciais SMTP reais apenas no Azure Portal ou via CLI (nunca no repositório):
+   ```bash
+   az webapp config appsettings set --resource-group "$RG" --name "$APP_NAME" --settings \
+     MAIL_MAILER=smtp \
+     MAIL_HOST=smtp.resend.com \
+     MAIL_PORT=587 \
+     MAIL_USERNAME=resend \
+     MAIL_PASSWORD="<RESEND_API_KEY>" \
+     MAIL_ENCRYPTION=tls \
+     MAIL_FROM_ADDRESS="contato@assin.art" \
+     MAIL_FROM_NAME="Assinart" \
+     MAIL_REPLY_TO_ADDRESS="sac@assin.art" \
+     MAIL_REPLY_TO_NAME="Assinart"
+   ```
+   *(No Azure App Settings, informe `Assinart` literalmente em `MAIL_FROM_NAME` e `MAIL_REPLY_TO_NAME`, pois variáveis de ambiente do sistema não expandem `${APP_NAME}` como o parser `.env`.)*
+
+### 9.5 Checklist manual pós-DNS (`API-22.1..22.4` e `API-22.7` — Proprietário)
+
+> **Importante:** Conclua todos os itens abaixo antes de mover `API-22` para `DONE`.
+
+- [ ] **API-22.1:** Escolher Opção A (ImprovMX direto no DNS da Hostinger) ou Opção B (migrar nameservers para Cloudflare + Email Routing), preservando `A`/`AAAA`/`CNAME` do GitHub Pages, e verificar o Gmail pessoal apenas no painel.
+- [ ] **API-22.2:** Criar aliases/regras `sac@assin.art` e `contato@assin.art` apontando para o Gmail pessoal verificado.
+- [ ] **API-22.3:** Validar domínio no provedor transacional (**Resend** ou **Brevo**) com `DKIM`, `SPF` único combinado e `DMARC`.
+- [ ] **API-22.4:** Configurar `MAIL_MAILER=smtp` e credenciais reais apenas via Azure Portal / `az webapp config appsettings set`.
+- [ ] **API-22.7:** Executar validação externa pós-propagação DNS e confirmar recebimento real:
+  ```bash
+  dig +short MX assin.art
+  dig +short TXT assin.art
+  dig +short TXT _dmarc.assin.art
+  dig +short A assin.art
+  dig +short CNAME www.assin.art
+  ```
+  - Confirmar que os registros `A` e `CNAME` (`www` -> `pinhogo.github.io`) do GitHub Pages continuam intactos.
+  - Confirmar apenas um registro `TXT` começando com `v=spf1` em `assin.art`.
+  - Enviar e-mail externo para `sac@assin.art` e confirmar entrega no Gmail pessoal.
+  - Enviar e-mail externo para `contato@assin.art` e confirmar entrega no Gmail pessoal.
