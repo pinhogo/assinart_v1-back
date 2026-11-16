@@ -82,16 +82,34 @@ class CorsSecurityTest extends TestCase
         $this->assertNotContains('*', config('cors.paths'));
         $this->assertSame(['api/*', 'sanctum/csrf-cookie', 'up', 'r/*'], config('cors.paths'));
 
-        $previous = getenv('CORS_ALLOWED_ORIGINS');
-        putenv('CORS_ALLOWED_ORIGINS=https://preview.assin.art, https://staging.assin.art');
+        $previousGetenv = getenv('CORS_ALLOWED_ORIGINS');
+        $hadEnv = array_key_exists('CORS_ALLOWED_ORIGINS', $_ENV);
+        $previousEnv = $_ENV['CORS_ALLOWED_ORIGINS'] ?? null;
+        $hadServer = array_key_exists('CORS_ALLOWED_ORIGINS', $_SERVER);
+        $previousServer = $_SERVER['CORS_ALLOWED_ORIGINS'] ?? null;
+
+        $override = 'https://preview.assin.art, https://staging.assin.art';
+        putenv('CORS_ALLOWED_ORIGINS=' . $override);
+        $_ENV['CORS_ALLOWED_ORIGINS'] = $override;
+        $_SERVER['CORS_ALLOWED_ORIGINS'] = $override;
 
         try {
             $loadedConfig = require base_path('config/cors.php');
         } finally {
-            if ($previous === false) {
+            if ($previousGetenv === false) {
                 putenv('CORS_ALLOWED_ORIGINS');
             } else {
-                putenv('CORS_ALLOWED_ORIGINS=' . $previous);
+                putenv('CORS_ALLOWED_ORIGINS=' . $previousGetenv);
+            }
+            if ($hadEnv) {
+                $_ENV['CORS_ALLOWED_ORIGINS'] = $previousEnv;
+            } else {
+                unset($_ENV['CORS_ALLOWED_ORIGINS']);
+            }
+            if ($hadServer) {
+                $_SERVER['CORS_ALLOWED_ORIGINS'] = $previousServer;
+            } else {
+                unset($_SERVER['CORS_ALLOWED_ORIGINS']);
             }
         }
 
