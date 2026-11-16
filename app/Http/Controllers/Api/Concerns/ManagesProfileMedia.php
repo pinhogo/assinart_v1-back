@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 trait ManagesProfileMedia
 {
@@ -16,8 +15,8 @@ trait ManagesProfileMedia
         $artist = $request->user();
 
         $this->deleteFileFromStorage($artist->avatar_url);
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $artist->update(['avatar_url' => Storage::url($path)]);
+        $url = $this->storeMediaFile($request->file('avatar'), 'avatars');
+        $artist->update(['avatar_url' => $url]);
 
         return response()->json([
             'status' => 'success',
@@ -41,8 +40,8 @@ trait ManagesProfileMedia
         $artist = $request->user();
 
         $this->deleteFileFromStorage($artist->cover_url);
-        $path = $request->file('cover')->store('covers', 'public');
-        $artist->update(['cover_url' => Storage::url($path)]);
+        $url = $this->storeMediaFile($request->file('cover'), 'covers');
+        $artist->update(['cover_url' => $url]);
 
         return response()->json([
             'status' => 'success',
@@ -67,8 +66,8 @@ trait ManagesProfileMedia
         $artist = $request->user();
 
         $this->deleteFileFromStorage($artist->wallpaper_url);
-        $path = $request->file($fileKey)->store('wallpapers', 'public');
-        $artist->update(['wallpaper_url' => Storage::url($path), 'background_id' => null]);
+        $url = $this->storeMediaFile($request->file($fileKey), 'wallpapers');
+        $artist->update(['wallpaper_url' => $url, 'background_id' => null]);
 
         return response()->json([
             'status' => 'success',

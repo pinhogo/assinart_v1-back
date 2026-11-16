@@ -11,7 +11,6 @@ use App\Services\ButtonOrderService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class ButtonController extends Controller
 {
@@ -172,16 +171,7 @@ class ButtonController extends Controller
         $artist = $request->user();
         $button = $artist->buttons()->findOrFail($id);
 
-        if ($button->image_url) {
-            $parsedPath = parse_url($button->image_url, PHP_URL_PATH) ?? $button->image_url;
-            $relativePath = ltrim(str_replace('/storage/', '', $parsedPath), '/');
-            if (str_starts_with($relativePath, 'storage/')) {
-                $relativePath = substr($relativePath, 8);
-            }
-            if ($relativePath && Storage::disk('public')->exists($relativePath)) {
-                Storage::disk('public')->delete($relativePath);
-            }
-        }
+        $this->deleteFileFromStorage($button->image_url);
 
         $button->delete();
 
@@ -196,16 +186,7 @@ class ButtonController extends Controller
         $artist = $request->user();
 
         foreach ($artist->buttons as $button) {
-            if ($button->image_url) {
-                $parsedPath = parse_url($button->image_url, PHP_URL_PATH) ?? $button->image_url;
-                $relativePath = ltrim(str_replace('/storage/', '', $parsedPath), '/');
-                if (str_starts_with($relativePath, 'storage/')) {
-                    $relativePath = substr($relativePath, 8);
-                }
-                if ($relativePath && Storage::disk('public')->exists($relativePath)) {
-                    Storage::disk('public')->delete($relativePath);
-                }
-            }
+            $this->deleteFileFromStorage($button->image_url);
         }
 
         $artist->buttons()->delete();
