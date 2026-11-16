@@ -115,7 +115,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'status' => 'success',
-            'data' => $request->user(),
+            'data' => $request->user()?->fresh() ?? $request->user(),
         ], 200);
     }
 

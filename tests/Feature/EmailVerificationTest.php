@@ -47,7 +47,7 @@ class EmailVerificationTest extends TestCase
                 . urlencode('clara@assin.art')
                 . '&token=' . urlencode($mail->plainToken);
 
-            $html = $mail->render();
+            $html = html_entity_decode($mail->render(), ENT_QUOTES, 'UTF-8');
 
             return $mail->hasTo('clara@assin.art')
                 && $mail->verificationUrl === $expectedUrl
@@ -282,6 +282,8 @@ class EmailVerificationTest extends TestCase
 
         $this->assertNotNull($loginResp->json('artist.email_verified_at'));
         $this->assertNotNull($loginResp->json('data.user.email_verified_at'));
+
+        $this->app['auth']->forgetGuards();
 
         $meVerified = $this->withHeader('Authorization', 'Bearer ' . $loginResp->json('token'))
             ->getJson('/api/v1/auth/me')
