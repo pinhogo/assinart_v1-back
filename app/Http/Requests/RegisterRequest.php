@@ -64,7 +64,7 @@ class RegisterRequest extends FormRequest
                 Rule::unique('artists', 'username'),
             ],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:artists,email'],
-            'password' => ['required', 'string', 'min:6'],
+            'password' => ['required', 'string', 'min:8'],
             'agree_terms' => ['required', 'accepted'],
         ];
     }
@@ -84,7 +84,7 @@ class RegisterRequest extends FormRequest
             'email.max' => 'O e-mail não pode exceder 255 caracteres.',
             'email.unique' => 'Este e-mail já está cadastrado.',
             'password.required' => 'A senha é obrigatória.',
-            'password.min' => 'A senha deve conter pelo menos 6 caracteres.',
+            'password.min' => 'A senha deve conter pelo menos 8 caracteres.',
             'agree_terms.required' => 'Você precisa concordar com os termos de uso.',
             'agree_terms.accepted' => 'Você precisa concordar com os termos de uso.',
         ]);
