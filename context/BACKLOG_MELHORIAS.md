@@ -1883,3 +1883,34 @@
 3. `FIX-GLB-22` não depende do backend. Execute após `CAD-11` para reaproveitar a guarda e o estado `isEmailVerified`.
 4. `API-20` conclui parte do `SEC-01` (`SEC-14`). Não execute os dois em paralelo (mesmos arquivos).
 5. `API-22` (encaminhamento `sac@assin.art` -> Gmail) independe de código, mas coordene o registro `SPF` com o provedor escolhido em `API-20`.
+
+---
+
+## 🧪 Teste de Carga em Container (Simulação Azure `B1`) — `BACKLOG - FLUXO B`
+
+### [API-23] Simular Teste de Carga Local em Container com Limites do Azure App Service (B1)
+
+- **Estado no Backlog:** Pendente *(Issue `pinhogo/assinart_v1-back#20`)*
+- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `GLB (Global)` | Etapa `Fluxo B (Planejado)` (https://github.com/pinhogo/assinart_v1-back/issues/20)
+
+**Contexto Bruto:**
+
+> coloca nas tasks pra simular teste de carga local em um container com as caractericas limitadas simulando o ambiente da azure.
+
+**Pré-Tasks / Subtarefas Técnicas (Gerado por IA — Padrão ASD-STE100):**
+
+- **Problema:** A `API-18` (`#11`) validou o SQLite `WAL` em um teste sequencial local no PHPUnit, mas ainda não existe um ambiente containerizado local que reproduza os limites reais de hardware e runtime do Azure App Service Linux `B1` (`1 vCPU`, `1,75 GB RAM`, PHP 8.3-FPM + Nginx, `azure/nginx.conf`, `public/.user.ini` e volume `/home/data`) sob requisições concorrentes.
+- **Solução Proposta:** Criar um ambiente Docker/Compose local limitado a `1.0 vCPU` e `1792 MB` de RAM espelhando o runtime do `azure/` (`PHP 8.3-FPM` + `Nginx`), junto de um script reproduzível de carga concorrente em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`, registrando métricas de latência, erros `5xx` e eventuais `database is locked`.
+- **OBS:** Complementa `API-18` (`#11`) e fornece base empírica para decidir entre subir o MVP em SQLite `WAL` ou virar direto para PostgreSQL (`API-12` / `#327`). Requer Docker Engine/Compose instalado no host ou execução em runner Linux com Docker (ex.: GitHub Actions `ubuntu-latest`) caso a máquina local não tenha Docker instalado.
+- **Como Executar (Subtarefas):**
+  - [ ] **API-23.1.** Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx (`mbstring`, `fileinfo`, `pdo_sqlite`, `pdo_pgsql`, `gd`), copiando `azure/nginx.conf`, `public/.user.ini` e aplicando o boot equivalente ao `azure/startup.sh`.
+  - [ ] **API-23.2.** Crie `docker/azure-sim/compose.yml` aplicando os limites do Azure `B1` (`cpus: '1.0'`, `mem_limit: 1792m`, 1 instância, `DB_CONNECTION=sqlite`, `DB_SQLITE_JOURNAL_MODE=WAL`, `DB_SQLITE_BUSY_TIMEOUT=5000`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`) com volume mapeando `/home/data`.
+  - [ ] **API-23.3.** Crie `scripts/load-test-azure-sim.sh` (usando `k6` em container auxiliar ou workers paralelos configuráveis) disparando carga concorrente simultânea contra `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
+  - [ ] **API-23.4.** Adicione suporte opcional no script/Compose para rodar a mesma bateria contra PostgreSQL em container e comparar p95, throughput e uso de memória/CPU com o SQLite `WAL`.
+  - [ ] **API-23.5.** Execute a bateria localmente (ou em workflow manual `workflow_dispatch` com Docker), colete latência p50/p95, taxa de erro e logs do Laravel/Nginx, e registre o resultado e o critério de corte SQLite -> PostgreSQL em `context/DEPLOY_PLAN.md`.
+
+**Localização & Referências:**
+
+- **Rota / URL:** `/api/v1/track` | `/r/{id}` | `/{username}` | `/up`
+- **Arquivos / Pastas:** `docker/azure-sim/Dockerfile` | `docker/azure-sim/compose.yml` | `scripts/load-test-azure-sim.sh` | `context/DEPLOY_PLAN.md`
+- **Docs / Assets:** `context/DEPLOY_PLAN.md` | `context/tasks_backend.md` | relacionada com `API-18` (`#11`) e `API-12` (`#327`)

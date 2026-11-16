@@ -352,3 +352,12 @@
     - [ ] Alinhe `MAIL_FROM_ADDRESS` e `MAIL_REPLY_TO_ADDRESS` em `.env.example` e documente o DNS em `context/DEPLOY_PLAN.md`.
     - [ ] Valide com `dig MX assin.art` e envio de e-mail externo real para `sac@assin.art`.
   - **Critério de aceite:** E-mail enviado para `sac@assin.art` chega à caixa do Gmail pessoal sem erro de DNS/SPF.
+
+- [ ] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`)**
+  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/compose.yml`, `scripts/load-test-azure-sim.sh`, `context/DEPLOY_PLAN.md`
+  - **Escopo:**
+    - [ ] Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx reproduzindo `azure/nginx.conf`, `public/.user.ini` e o boot equivalente ao `azure/startup.sh`.
+    - [ ] Crie `docker/azure-sim/compose.yml` com limites do SKU `B1` (`1.0` vCPU, `1792 MB` RAM, 1 instância) e volume persistente em `/home/data` (com modo SQLite `WAL` e opção PostgreSQL).
+    - [ ] Crie `scripts/load-test-azure-sim.sh` para carga concorrente simultânea em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
+    - [ ] Execute a bateria (em host/runner com Docker) e registre p50/p95, taxa de erro e o gatilho empírico de migração para `API-12` (PostgreSQL) em `context/DEPLOY_PLAN.md`.
+  - **Critério de aceite:** Ambiente limitado a `1 vCPU / 1,75 GB` sobe com os mesmos configs do `azure/` e conclui carga concorrente registrando latência, `0` erros `5xx` e evidência sobre locks do SQLite vs PostgreSQL.
