@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Mail\VerifyEmailMail;
 use App\Models\Artist;
 use App\Models\Button;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class ProfilePublicationTest extends TestCase
@@ -92,6 +94,7 @@ class ProfilePublicationTest extends TestCase
         $artist = Artist::factory()->create([
             'username' => 'fluxo_publicacao',
             'is_published' => false,
+            'email_verified_at' => now(),
         ]);
 
         Button::factory()->create([
@@ -198,5 +201,177 @@ class ProfilePublicationTest extends TestCase
                     'publication_status' => 'draft',
                 ],
             ]);
+    }
+
+    /**
+     * API-21: Usuário sem e-mail verificado recebe 422 (email_not_verified) ao tentar publicar via PATCH ou PUT.
+     */
+    public function test_unverified_user_cannot_publish_profile_via_patch_or_put(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'nao_verificado_pub',
+            'bio' => 'Bio original',
+            'is_published' => false,
+            'email_verified_at' => null,
+        ]);
+
+        $expectedPayload = [
+            'status' => 'error',
+            'code' => 'email_not_verified',
+            'message' => 'Confirme seu e-mail antes de publicar seu perfil.',
+            'errors' => [
+                'is_published' => ['Confirme seu e-mail antes de publicar seu perfil.'],
+            ],
+        ];
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['is_published' => true, 'bio' => 'Nao deve salvar'])
+            ->assertStatus(422)
+            ->assertExactJson($expectedPayload);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', ['is_published' => true])
+            ->assertStatus(422)
+            ->assertExactJson($expectedPayload);
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['publication_status' => 'published'])
+            ->assertStatus(422)
+            ->assertExactJson($expectedPayload);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', ['publication_status' => 'published'])
+            ->assertStatus(422)
+            ->assertExactJson($expectedPayload);
+
+        // is_published tem prioridade explícita quando ambos os campos são enviados
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['is_published' => true, 'publication_status' => 'draft'])
+            ->assertStatus(422)
+            ->assertExactJson($expectedPayload);
+
+        $this->assertDatabaseHas('artists', [
+            'id' => $artist->id,
+            'bio' => 'Bio original',
+            'is_published' => 0,
+        ]);
+    }
+
+    /**
+     * API-21: Usuário sem e-mail verificado continua podendo editar perfil em rascunho com 200.
+     */
+    public function test_unverified_user_can_save_profile_draft_fields(): void
+    {
+        $artist = Artist::factory()->create([
+            'name' => 'Nome Inicial',
+            'username' => 'rascunho_unverified',
+            'bio' => 'Bio antiga',
+            'is_published' => false,
+            'email_verified_at' => null,
+        ]);
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'name' => 'Nome Editado',
+                'bio' => 'Nova bio em rascunho',
+                'is_published' => false,
+            ])
+            ->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'name' => 'Nome Editado',
+                    'bio' => 'Nova bio em rascunho',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+            ]);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/profile', [
+                'bio' => 'Bio via PUT',
+                'publication_status' => 'draft',
+            ])
+            ->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'bio' => 'Bio via PUT',
+                    'is_published' => false,
+                    'publication_status' => 'draft',
+                ],
+            ]);
+
+        // is_published: false prevalece sobre publication_status: 'published'
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'is_published' => false,
+                'publication_status' => 'published',
+            ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.is_published', false)
+            ->assertJsonPath('data.publication_status', 'draft');
+
+        $this->assertDatabaseHas('artists', [
+            'id' => $artist->id,
+            'name' => 'Nome Editado',
+            'bio' => 'Bio via PUT',
+            'is_published' => 0,
+        ]);
+    }
+
+    /**
+     * API-21: Após confirmar o e-mail via /auth/email/verify, PATCH /api/v1/profile publica o perfil com 200.
+     */
+    public function test_user_can_publish_profile_after_verifying_email(): void
+    {
+        Mail::fake();
+
+        $register = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Artista Verificavel',
+            'username' => 'artista_verificavel',
+            'email' => 'verificavel@assin.art',
+            'password' => 'secret123',
+            'agree_terms' => true,
+        ])->assertStatus(201);
+
+        $token = $register->json('token');
+
+        $plainToken = null;
+        Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use (&$plainToken) {
+            $plainToken = $mail->plainToken;
+            return true;
+        });
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->patchJson('/api/v1/profile', ['is_published' => true])
+            ->assertStatus(422)
+            ->assertJson([
+                'status' => 'error',
+                'code' => 'email_not_verified',
+            ]);
+
+        $this->postJson('/api/v1/auth/email/verify', [
+            'email' => 'verificavel@assin.art',
+            'token' => $plainToken,
+        ])->assertStatus(200);
+
+        $this->app['auth']->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->patchJson('/api/v1/profile', ['is_published' => true])
+            ->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'is_published' => true,
+                    'publication_status' => 'published',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('artists', [
+            'email' => 'verificavel@assin.art',
+            'is_published' => 1,
+        ]);
     }
 }
