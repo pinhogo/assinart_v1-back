@@ -38,7 +38,6 @@ class PublicProfileController extends Controller
         $isPublished = (bool) $artist->is_published;
         $publicationStatus = $artist->publication_status;
         $artistSummary = array_merge([
-            'id' => (int) $artist->id,
             'name' => $artist->name,
             'username' => $artist->username,
             'bio' => $artist->bio,
@@ -60,7 +59,6 @@ class PublicProfileController extends Controller
             'circular_links' => $circularLinks,
             'button_links' => $buttonLinks,
             'data' => [
-                'id' => (int) $artist->id,
                 'name' => $artist->name,
                 'username' => $artist->username,
                 'bio' => $artist->bio,
