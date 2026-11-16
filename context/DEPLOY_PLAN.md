@@ -117,186 +117,77 @@ flowchart LR
      ```
    - Preserva IP real do cliente (`RateLimiter` de login, `throttle:60,1` em `/r/{id}`, fallback de `visitor_id` em `/api/v1/track`) e esquema `https` em `url("/r/{$btn->id}")`.
 
-2. **Completar CORS (`config/cors.php`):**
-   - Incluir `https://www.assin.art` e suporte via `CORS_ALLOWED_ORIGINS`:
+2. **Completar CORS e Security Headers (`config/cors.php`, `app/Http/Middleware/SecurityHeaders.php`, `bootstrap/app.php`):**
+   - `paths` restrito a `['api/*', 'sanctum/csrf-cookie', 'up', 'r/*']` (sem `'*'`) e `supports_credentials => false` (autenticação via Bearer Token).
+   - `allowed_origins` inclui `https://assin.art`, `https://www.assin.art` e origens extras via `CORS_ALLOWED_ORIGINS`:
      ```php
      'allowed_origins' => array_values(array_filter(array_unique(array_merge([
          'http://localhost:5173',
          'https://assin.art',
          'https://www.assin.art',
          'http://127.0.0.1:5173',
-     ], explode(',', (string) env('CORS_ALLOWED_ORIGINS', '')))))),
+     ], array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))))))),
      ```
+   - `SecurityHeaders` aplica `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin` e `Strict-Transport-Security: max-age=31536000; includeSubDomains` (em HTTPS/produção).
 
 3. **Configurar Nginx (`azure/nginx.conf`):**
    - `root /home/site/wwwroot/public;`
    - `client_max_body_size 16M;` (suporta `10240 KB` de capa/wallpaper + overhead multipart)
    - `try_files $uri $uri/ /index.php?$query_string;`
-   - Bloquear arquivos ocultos (`location ~ /\.(?!well-known).* { deny all; }`) e **bloquear execução PHP dentro de `/storage/`** (`location ~* ^/storage/.*\.php$ { deny all; }`).
+   - Bloqueia arquivos ocultos (`location ~ /\.(?!well-known).* { deny all; }`) e **bloqueia execução PHP dentro de `/storage/`** (`location ~* ^/storage/.*\.php$ { deny all; }`).
 
-4. **Configurar limites PHP (`azure/php-uploads.ini`):**
-   - Via `PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/home/site/wwwroot/azure`:
+4. **Configurar limites PHP (`public/.user.ini`):**
+   - Arquivo versionado em `public/.user.ini` (independente de `PHP_INI_SCAN_DIR`):
      ```ini
-     upload_max_filesize = 12M
-     post_max_size = 16M
-     memory_limit = 256M
-     max_execution_time = 60
-     expose_php = Off
+     upload_max_filesize=12M
+     post_max_size=16M
+     memory_limit=256M
+     max_execution_time=60
+     expose_php=Off
      ```
 
-5. **Criar script de startup idempotente (`azure/startup.sh`):**
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-
-   mkdir -p /home/data/storage/app/public/{avatars,covers,cards,wallpapers}
-   mkdir -p /home/site/wwwroot/storage/app
-   mkdir -p /home/site/wwwroot/storage/framework/{sessions,views,cache/data}
-   mkdir -p /home/site/wwwroot/storage/logs
-
-   if [ "${DB_CONNECTION:-sqlite}" = "sqlite" ] && [ -n "${DB_DATABASE:-}" ]; then
-     mkdir -p "$(dirname "$DB_DATABASE")"
-     touch "$DB_DATABASE"
-   fi
-
-   rm -rf /home/site/wwwroot/storage/app/public
-   ln -sfn /home/data/storage/app/public /home/site/wwwroot/storage/app/public
-   ln -sfn /home/data/storage/app/public /home/site/wwwroot/public/storage
-
-   cd /home/site/wwwroot
-   php artisan migrate --force
-   php artisan optimize:clear
-   php artisan config:cache
-   php artisan route:cache
-   php artisan view:cache
-
-   cp /home/site/wwwroot/azure/nginx.conf /etc/nginx/sites-available/default
-   nginx -t
-   nginx -s reload || service nginx reload  # P1-1: valide no App Service real
-   ```
+5. **Script de startup idempotente e backup (`azure/startup.sh`, `azure/backup.sh`, `config/database.php`):**
+   - Cria `/home/data/storage/app/public/{avatars,covers,cards,wallpapers}` e pastas `storage/framework/{sessions,views,cache/data}` e `storage/logs`.
+   - Recria symlinks de `/home/site/wwwroot/storage/app/public` e `/home/site/wwwroot/public/storage` -> `/home/data/storage/app/public`.
+   - Executa backup com timestamp em `/home/data/backups/database_<UTC>.sqlite` antes de `php artisan migrate --force`.
+   - Conexão `sqlite` em `config/database.php` configurada com `busy_timeout=5000` (`DB_SQLITE_BUSY_TIMEOUT`) e `journal_mode=WAL` (`DB_SQLITE_JOURNAL_MODE`).
+   - Copia `azure/nginx.conf` e recarrega com `nginx -s reload || service nginx reload || true` (validar comportamento no App Service real).
 
 6. **Aplicar correções de segurança pré-produção (bloqueante: `SEC-14` e `SEC-04`..`SEC-13`; ver seção 7) (ver [SECURITY_AUDIT.md](file:///home/pinho/Projetos/assinart_v1_backend/context/SECURITY_AUDIT.md)) e validar suíte local:**
    - Executar `php artisan test` (incluindo os novos testes de métricas, publicação/draft, normalização de username, account deletion e background media) garantindo exit code `0`.
 
 ---
 
-### Fase 2 — Provisionamento no Azure (`az` CLI)
+### Fase 2 e Fase 3 — Provisionamento Azure e App Settings (`azure/provision.sh`, `azure/appsettings.example.env`)
 
-```bash
-RG="rg-assinart-prod"
-LOCATION="brazilsouth" # fallback: eastus2
-PLAN="plan-assinart-prod"
-APP_NAME="assinart-api"
-
-az group create --name "$RG" --location "$LOCATION"
-
-az appservice plan create \
-  --name "$PLAN" \
-  --resource-group "$RG" \
-  --location "$LOCATION" \
-  --sku B1 \
-  --is-linux
-
-az webapp create \
-  --resource-group "$RG" \
-  --plan "$PLAN" \
-  --name "$APP_NAME" \
-  --runtime "PHP:8.3"
-
-az webapp update --resource-group "$RG" --name "$APP_NAME" --https-only true
-
-az webapp config set \
-  --resource-group "$RG" \
-  --name "$APP_NAME" \
-  --always-on true \
-  --ftps-state Disabled \
-  --min-tls-version 1.2 \
-  --http20-enabled true \
-  --startup-file "/home/site/wwwroot/azure/startup.sh"
-
-az webapp log config \
-  --resource-group "$RG" \
-  --name "$APP_NAME" \
-  --application-logging filesystem \
-  --level information \
-  --web-server-logging filesystem
-```
+- Executar `./azure/provision.sh` (com `RG`, `LOCATION=brazilsouth`, fallback `eastus2`, `PLAN`, `APP_NAME`, `BUDGET_EMAIL`) para:
+  1. Validar `az account show`, região/quota Linux `B1` e disponibilidade global do Web App.
+  2. Criar Resource Group, App Service Plan `B1 --is-linux --number-of-workers 1` e Web App `PHP:8.3`.
+  3. Habilitar `--https-only true`, `--always-on true`, `--ftps-state Disabled`, `--min-tls-version 1.2`, `--http20-enabled true` e `--startup-file /home/site/wwwroot/azure/startup.sh`.
+  4. Configurar App Settings conforme `azure/appsettings.example.env` (incluindo `WEBSITES_CONTAINER_START_TIME_LIMIT=230`, `DB_SQLITE_BUSY_TIMEOUT=5000`, `DB_SQLITE_JOURNAL_MODE=WAL`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`, `LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`, `MAIL_MAILER=log`, **sem** `SANCTUM_STATEFUL_DOMAINS`).
+  5. Criar alerta de orçamento mensal via `az consumption budget create` para proteger os créditos **Azure for Students**.
 
 ---
 
-### Fase 3 — Configuração de App Settings (Variáveis de Ambiente)
+### Fase 4 — Build Limpo, CI/CD e Empacotamento (`.github/workflows/deploy-backend.yml`, `.gitattributes`)
 
-```bash
-APP_KEY="base64:$(openssl rand -base64 32)"
-
-az webapp config appsettings set \
-  --resource-group "$RG" \
-  --name "$APP_NAME" \
-  --settings \
-    APP_NAME="Assinart" \
-    APP_ENV="production" \
-    APP_DEBUG="false" \
-    APP_KEY="$APP_KEY" \
-    APP_TIMEZONE="America/Sao_Paulo" \
-    APP_LOCALE="pt_BR" \
-    APP_URL="https://${APP_NAME}.azurewebsites.net" \
-    FRONTEND_URL="https://assin.art" \
-    CORS_ALLOWED_ORIGINS="https://assin.art,https://www.assin.art" \
-    SANCTUM_STATEFUL_DOMAINS="assin.art,www.assin.art" \
-    DB_CONNECTION="sqlite" \
-    DB_DATABASE="/home/data/database.sqlite" \
-    FILESYSTEM_DISK="public" \
-    SESSION_DRIVER="file" \
-    CACHE_STORE="file" \
-    QUEUE_CONNECTION="sync" \
-    LOG_CHANNEL="stderr" \
-    LOG_LEVEL="warning" \
-    MAIL_MAILER="log" \
-    WEBSITES_ENABLE_APP_SERVICE_STORAGE="true" \
-    PHP_INI_SCAN_DIR="/usr/local/etc/php/conf.d:/home/site/wwwroot/azure"
-```
+- O workflow `.github/workflows/deploy-backend.yml` executa automaticamente em PHP `8.3` (`fileinfo`, `mbstring`, `pdo_sqlite`, `pdo_pgsql`):
+  1. Roda `php artisan test` antes de empacotar.
+  2. Exporta árvore limpa com `git archive` (`.gitattributes` com `export-ignore` descarta `context/`, `docs/`, `documentacao/`, `tests/`, `*.md`, `run.sh`, `composer.phar`, `.phpunit*`, `.github/`).
+  3. Remove `.env*`, caches locais e arquivos `.sqlite` e roda `composer install --no-dev --optimize-autoloader --no-interaction`.
+  4. Pré-gera `route:cache` e `view:cache` (sem fixar `config:cache` com variáveis de build).
+  5. Salva `assinart-back-rollback-zip` via `actions/upload-artifact` (retenção de 30 dias) e publica via `azure/webapps-deploy` (ou `az webapp deploy`).
+- **Smoke tests pós-deploy:**
+  - `GET https://${APP_NAME}.azurewebsites.net/up` -> `200 OK`
+  - `GET https://${APP_NAME}.azurewebsites.net/` -> `200 OK` (`status: "operational"`)
+  - `GET https://${APP_NAME}.azurewebsites.net/api/v1/usernames/check?username=teste_deploy` -> `200 OK`
+  - `OPTIONS /api/v1/auth/login` com `Origin: https://assin.art` e `Access-Control-Request-Method: POST` -> `204 No Content` com `Access-Control-Allow-Origin: https://assin.art` e sem `Access-Control-Allow-Credentials: true`
+  - `OPTIONS /api/v1/auth/login` com `Origin: https://www.assin.art` -> `204 No Content` com `Access-Control-Allow-Origin: https://www.assin.art`
+  - Confirmar headers de segurança (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security`).
 
 ---
 
-### Fase 4 — Build Limpo, Empacotamento e Deploy do Backend
-
-1. **Exportar árvore limpa e preparar `vendor/` de produção:**
-   ```bash
-   rm -rf /tmp/assinart-build /tmp/assinart-back.zip
-   mkdir -p /tmp/assinart-build
-   git archive --format=tar HEAD | tar -x -C /tmp/assinart-build
-   cd /tmp/assinart-build
-
-   rm -f bootstrap/cache/*.php database/database.sqlite composer.phar \
-         deploy-prompt.json README-local.md run.sh
-   rm -rf tests context docs documentacao .agents storage/logs/*.log storage/framework/views/*.php
-
-   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-   chmod +x azure/startup.sh
-   zip -rq /tmp/assinart-back.zip . -x "*.git*" ".env*"
-   ```
-   *(Idealmente executar em ambiente PHP 8.3, como GitHub Actions `ubuntu-latest` + `shivammathur/setup-php@v2`.)*
-
-2. **Publicar e acompanhar logs:**
-   ```bash
-   az webapp deploy \
-     --resource-group "$RG" \
-     --name "$APP_NAME" \
-     --src-path /tmp/assinart-back.zip \
-     --type zip
-
-   az webapp log tail --resource-group "$RG" --name "$APP_NAME"
-   ```
-
-3. **Smoke tests do backend:**
-   - `GET https://${APP_NAME}.azurewebsites.net/up` -> `200 OK`
-   - `GET https://${APP_NAME}.azurewebsites.net/` -> `200 OK` (`status: "operational"`)
-   - `GET https://${APP_NAME}.azurewebsites.net/api/v1/usernames/check?username=teste_deploy` -> `200 OK`
-   - `OPTIONS` preflight com `Origin: https://assin.art` -> `204 No Content` com `Access-Control-Allow-Origin: https://assin.art`
-
----
-
-### Fase 5 — Conexão do Frontend (`assinart_v1`) no GitHub Pages
+### Fase 5 — Conexão do Frontend (`assinart_v1`), DNS e HTTPS
 
 ```bash
 gh variable set VITE_API_BASE_URL --repo pinhogo/assinart_v1 --body "https://assinart-api.azurewebsites.net/api/v1"
@@ -304,13 +195,16 @@ gh variable set VITE_USE_MOCK_API --repo pinhogo/assinart_v1 --body "false"
 gh workflow run deploy-pages.yml --repo pinhogo/assinart_v1 --ref main
 ```
 
-Confirmar no log do GitHub Actions que `npm run test && npm run build` concluiu sem erros e publicou `dist/404.html`.
+- **DNS e HTTPS (`assin.art` e `www.assin.art`):**
+  - Confirmar registros `A` do apex `assin.art` apontando para os 4 IPs oficiais do GitHub Pages (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`) e `CNAME` de `www.assin.art` apontando para `pinhogo.github.io` (ou redirecionamento canônico `www.assin.art` -> `https://assin.art`).
+  - Confirmar **Enforce HTTPS** ativo nas configurações de GitHub Pages e certificados TLS válidos para `https://assin.art` e `https://www.assin.art` (`curl -I https://assin.art` e `curl -I https://www.assin.art`).
+  - Confirmar no log do GitHub Actions que `npm run test && npm run build` concluiu sem erros e publicou `dist/404.html`.
 
 ---
 
-## 5. Validação End-to-End (Fase 6)
+## 5. Validação End-to-End (Fase 6) e Limitações Conhecidas
 
-Executar em **aba anônima**:
+Executar em **aba anônima** (sem cache ou sessão prévia):
 
 1. **Cadastro e Onboarding (`/cadastro`):**
    - Acessar `https://assin.art/cadastro` e verificar `GET /api/v1/usernames/check` no Network.
@@ -325,13 +219,40 @@ Executar em **aba anônima**:
    - Clicar em botão (`GET /r/{id}` -> `302 Found`) e verificar atualização em `GET /api/v1/metrics/summary`.
 5. **Persistência pós-restart:**
    - Rodar `az webapp restart --resource-group "$RG" --name "$APP_NAME"` e confirmar que banco `/home/data/database.sqlite` e uploads em `/home/data/storage/app/public` permanecem intactos.
+6. **Limitação conhecida de `forgot-password` (`MAIL_MAILER=log`):**
+   - Em MVP (`MAIL_MAILER=log` e `LOG_LEVEL=warning`), `POST /api/v1/auth/forgot-password` e `resendVerification` **não enviam e-mail SMTP real**; os links/tokens só aparecem em logs se o nível incluir `info`/`debug` (evitar em produção para não expor tokens em `stderr`). A entrega real de e-mails será habilitada na fase pós-MVP (`API-20`).
+7. **Gatilho de migração SQLite -> PostgreSQL/MySQL (`#327` / Task 8.1):**
+   - Migrar imediatamente de SQLite (`/home/data/database.sqlite`) para **Azure Database for PostgreSQL** ou **MySQL Flexible Server** assim que ocorrer qualquer um destes gatilhos:
+     1. Qualquer ocorrência de `database is locked` nos logs do Azure (`stderr`).
+     2. Latência `p95 > 500 ms` em `POST /api/v1/track` ou `GET /r/{id}` sob tráfego real.
+     3. Arquivo `database.sqlite` ultrapassar `100 MB` ou necessidade de escalar o App Service além de `1` instância (`workers > 1`).
 
 ---
 
-## 6. Plano de Rollback
+## 6. Plano de Rollback (< 15 minutos)
 
-1. **Frontend:** Alterar `VITE_USE_MOCK_API` para `true` nas GitHub Variables e reexecutar `deploy-pages.yml` para restaurar o modo demo imediatamente.
-2. **Backend:** Manter backup de `/home/data/database.sqlite` antes de deploys com novas migrations; em caso de falha, reimplantar o ZIP anterior estável via `az webapp deploy --type zip` e reiniciar o Web App.
+1. **Frontend (< 3 min):** Alterar `VITE_USE_MOCK_API` para `true` nas GitHub Variables (`gh variable set VITE_USE_MOCK_API --repo pinhogo/assinart_v1 --body "true"`) e reexecutar `deploy-pages.yml` para restaurar o modo demo imediatamente.
+2. **Backend (< 12 min — pacote + banco + schema):**
+   1. **Baixar o ZIP estável anterior:** No GitHub Actions do `assinart_v1-back`, baixar o artefato `assinart-back-rollback-zip` da última execução saudável (`gh run download <RUN_ID> -n assinart-back-rollback-zip`).
+   2. **Reverter schema antes do código (se houve nova migration incompatível):** Via Kudu/SSH do App Service (`az webapp ssh`), executar:
+      ```bash
+      cd /home/site/wwwroot
+      php artisan migrate:rollback --step=1 --force
+      ```
+   3. **Restaurar backup do SQLite (se houve corrupção ou data migration irreversível):** Via Kudu/SSH, restaurar o snapshot pré-deploy gerado automaticamente pelo `azure/startup.sh` ou `azure/backup.sh` em `/home/data/backups/`:
+      ```bash
+      ls -lh /home/data/backups/database_*.sqlite
+      cp -p /home/data/database.sqlite /home/data/database.sqlite.broken
+      rm -f /home/data/database.sqlite-wal /home/data/database.sqlite-shm
+      sqlite3 /home/data/database.sqlite ".restore '/home/data/backups/database_<TIMESTAMP>.sqlite'"
+      # Fallback sem sqlite3 CLI: cp -p /home/data/backups/database_<TIMESTAMP>.sqlite /home/data/database.sqlite
+      ```
+   4. **Reimplantar o ZIP anterior e reiniciar:**
+      ```bash
+      az webapp deploy --resource-group "$RG" --name "$APP_NAME" --src-path ./assinart-back.zip --type zip
+      az webapp restart --resource-group "$RG" --name "$APP_NAME"
+      ```
+   5. **Confirmar recuperação:** Validar `GET /up` (`200 OK`), `GET /` (`200 OK`) e fluxo de login antes de liberar tráfego.
 
 
 ---

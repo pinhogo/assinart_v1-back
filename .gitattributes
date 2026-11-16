@@ -1,0 +1,9 @@
+context/ export-ignore
+docs/ export-ignore
+documentacao/ export-ignore
+tests/ export-ignore
+*.md export-ignore
+run.sh export-ignore
+composer.phar export-ignore
+.phpunit* export-ignore
+.github/ export-ignore
