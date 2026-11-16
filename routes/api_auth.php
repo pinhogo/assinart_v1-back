@@ -15,17 +15,22 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Disponibilidade de @username (Pública - Landing Page e Cadastro)
-Route::get('/usernames/check', [UsernameController::class, 'check']);
+Route::get('/usernames/check', [UsernameController::class, 'check'])
+    ->middleware('throttle:60,1');
 
 // Endpoints de Autenticação e Gestão de Conta (M1 Auth)
 Route::prefix('auth')->group(function () {
     // Rotas Públicas
-    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/register', [AuthController::class, 'register'])
+        ->middleware('throttle:10,1');
     Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
+        ->middleware('throttle:5,1');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+        ->middleware('throttle:5,1');
     Route::post('/email/resend', [AuthController::class, 'resendVerification']);
-    Route::match(['get', 'post'], '/email/verify', [AuthController::class, 'verifyEmail']);
+    Route::match(['get', 'post'], '/email/verify', [AuthController::class, 'verifyEmail'])
+        ->name('verification.verify');
 
     // Rotas Protegidas por Token Sanctum
     Route::middleware('auth:sanctum')->group(function () {
