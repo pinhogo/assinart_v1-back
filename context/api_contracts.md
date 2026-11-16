@@ -57,6 +57,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "name": "Maria Silva",
         "username": "nomedeusuario",
         "email": "artista@exemplo.com",
+        "email_verified_at": null,
         "is_published": false,
         "publication_status": "draft"
       },
@@ -66,7 +67,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
   ```
 - **Campo `name`:** Nome artístico ou de exibição do artista. Obrigatório no formulário e persistido na tabela `ARTISTS`.
 - **Regra de `username` (unificada em registro, `PATCH /api/v1/profile` e `/usernames/check`):** Normalizado antes da validação (`trim`, `strtolower`, remoção de `@` inicial). Aceita `[a-z0-9_.-]` com `2` a `30` caracteres, não pode começar nem terminar com `.`, não pode conter `..`, rejeita palavras reservadas e exige unicidade em minúsculas.
-- **Estado Inicial de Publicação:** Toda nova conta inicia com `is_published: false` e `publication_status: "draft"`. O endpoint ignora flags de publicação enviados pelo cliente no cadastro.
+- **Estado Inicial de Publicação e Verificação:** Toda nova conta inicia com `is_published: false`, `publication_status: "draft"` e `email_verified_at: null`. O endpoint gera token único SHA-256 em `email_verification_tokens` (validade de 24h) e envia `VerifyEmailMail` com link para `FRONTEND_URL/confirmacao-email`. O onboarding não preenche `email_verified_at`.
 - **Requisitos de Senha e Tokens (`SEC-05`, `SEC-08`):** O cadastro (`POST /api/v1/auth/register`) e a redefinição de senha (`POST /api/v1/auth/reset-password`) exigem senha com no mínimo `8` caracteres. Os tokens Sanctum expiram conforme `SANCTUM_EXPIRATION` (padrão `43200` minutos / 30 dias), e o reset de senha revoga todos os tokens ativos do artista.
 - **Respostas de Erro:** 422 Unprocessable Entity (username em uso, e-mail duplicado, senha curta ou nome vazio), 429 Too Many Requests (throttling por rota).
 
@@ -89,6 +90,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "name": "Nome do Artista",
         "username": "nomedeusuario",
         "email": "artista@exemplo.com",
+        "email_verified_at": "2026-11-16T03:00:00.000000Z",
         "is_published": true,
         "publication_status": "published"
       },
@@ -100,7 +102,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 
 ### 2.3 Perfil Autenticado (`GET /api/v1/auth/me`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (200 OK):** Retorna o objeto completo do artista em `data`, incluindo `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`).
+- **Resposta de Sucesso (200 OK):** Retorna o objeto completo do artista em `data`, incluindo `email_verified_at`, `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`).
 - **Respostas de Erro:** 401 Unauthorized (token ausente ou expirado).
 
 ### 2.4 Logout (`POST /api/v1/auth/logout`)
@@ -119,6 +121,34 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 - **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Conta excluída permanentemente." }`.
 - **Respostas de Erro:** 422 Unprocessable Entity (senha incorreta), 401 Unauthorized.
 - **Nota Arquitetural:** O endpoint opera via método `POST` para evitar que proxies e CDNs descartem o payload com a senha.
+
+### 2.6 Confirmação de E-mail (`POST` / `GET /api/v1/auth/email/verify`)
+- **Acesso:** Público (por par `{ email, token }` ou URL assinada legada).
+- **Corpo da Requisição (`POST`):**
+  ```json
+  {
+    "email": "artista@exemplo.com",
+    "token": "token_em_texto_plano_recebido_por_email"
+  }
+  ```
+- **Validação e Uso Único:** Compara `hash('sha256', token)` com `email_verification_tokens.token_hash` via `hash_equals`, verifica `expires_at`, preenche `artists.email_verified_at` e remove os registros de `email_verification_tokens` do e-mail após o uso. Preserva compatibilidade com URL assinada válida (`hasValidSignature()`).
+- **Resposta de Sucesso (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "message": "E-mail confirmado com sucesso.",
+    "email_verified_at": "2026-11-16T03:00:00.000000Z"
+  }
+  ```
+- **Respostas de Erro:**
+  - `422 Unprocessable Entity`: e-mail ou token ausente na validação, inválido, já utilizado ou expirado.
+  - `403 Forbidden`: requisição legada sem `token` e sem assinatura válida.
+
+### 2.7 Reenvio de Confirmação de E-mail (`POST /api/v1/auth/email/resend`)
+- **Acesso:** Público ou Bearer Token.
+- **Corpo da Requisição:** `{ "email": "artista@exemplo.com" }` (opcional quando autenticado).
+- **Comportamento Anti-Enumeração:** Envia `VerifyEmailMail` somente quando o artista existe e `email_verified_at === null`. Retorna sempre `200 OK` genérico para e-mail inexistente ou já verificado.
+- **Throttle:** Aplica `RateLimiter` de `60` segundos por usuário autenticado ou `IP + email` normalizado (`429 Too Many Requests` com `retry_after`).
 
 ---
 
@@ -564,6 +594,14 @@ erDiagram
         bigint_unsigned button_id FK
         string visitor_id
         timestamp clicked_at
+    }
+
+    EMAIL_VERIFICATION_TOKENS {
+        bigint_unsigned id PK
+        string email
+        string token_hash
+        timestamp expires_at
+        timestamp created_at
     }
 
     ARTISTS {

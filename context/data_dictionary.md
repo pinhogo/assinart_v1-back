@@ -39,6 +39,14 @@ erDiagram
         timestamp updated_at
     }
 
+    EMAIL_VERIFICATION_TOKENS {
+        bigint_unsigned id PK
+        string email
+        string token_hash
+        timestamp expires_at
+        timestamp created_at
+    }
+
     ARTISTS {
         bigint_unsigned id PK
         string name
@@ -276,3 +284,21 @@ A migration `0001_01_01_000004_create_jobs_table.php` cria três tabelas. Use `Q
 | `jobs` | Guarda os jobs pendentes da fila (`queue`, `payload`, `attempts`, `reserved_at`, `available_at`, `created_at`). |
 | `job_batches` | Guarda o estado dos lotes de jobs (`total_jobs`, `pending_jobs`, `failed_jobs`, `cancelled_at`, `finished_at`). |
 | `failed_jobs` | Guarda os jobs que falharam (`uuid` único, `connection`, `queue`, `payload`, `exception`, `failed_at`). |
+
+---
+
+## 7. Tabela `email_verification_tokens`
+
+Armazena hashes SHA-256 de tokens de uso único e expiração temporária para confirmação de e-mail dos artistas.
+
+- **Nome no Banco:** `email_verification_tokens`
+- **Migration:** `database/migrations/2026_11_16_000001_create_email_verification_tokens_table.php`
+- **Chave Primária:** `id` (`BIGINT UNSIGNED AUTO_INCREMENT`)
+
+| Coluna | Tipo SQL | Nulo? | Padrão | Descrição Funcional |
+|---|---|:---:|---|---|
+| `id` | `BIGINT UNSIGNED` | Não | *Auto Increment* | Identificador único do registro de verificação. |
+| `email` | `VARCHAR(255)` | Não | — | E-mail normalizado do artista (indexado). |
+| `token_hash` | `VARCHAR(64)` | Não | — | Hash SHA-256 em hexadecimal do token enviado por e-mail. |
+| `expires_at` | `TIMESTAMP` | Não | — | Data e hora limite para uso do token (`+24h`). |
+| `created_at` | `TIMESTAMP` | Sim | `NULL` | Carimbo de criação do token. |
