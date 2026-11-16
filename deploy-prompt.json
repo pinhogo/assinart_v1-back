@@ -1,0 +1,235 @@
+{
+  "schema_version": "2.1",
+  "task": "Plano detalhado de deploy do backend Laravel (assinart_v1-back) no Azure App Service Linux (PHP 8.3) e integração com o frontend React/Vite (assinart_v1) no GitHub Pages",
+  "status": "planning_only_do_not_execute",
+  "baseline_commit": "e2fc47d (main após merge de origin/develop)",
+  "execution_policy": {
+    "mode": "dry_run_ready",
+    "require_explicit_user_confirmation_before_cloud_provisioning": true,
+    "recommend_fixing_critical_security_findings_before_public_launch": true,
+    "never_commit_secrets": [
+      ".env",
+      ".env.production",
+      "APP_KEY",
+      "publish_profiles",
+      "tokens"
+    ],
+    "exclude_from_deploy_artifact": [
+      ".git",
+      ".env",
+      ".env.*",
+      "database/database.sqlite",
+      "composer.phar",
+      "tests",
+      "bootstrap/cache/*.php",
+      "storage/logs/*",
+      "DEPLOY_PLAN.md",
+      "deploy-prompt.json",
+      "SECURITY_AUDIT.md",
+      "README-local.md"
+    ]
+  },
+  "constraints": {
+    "subscription": "Azure for Students",
+    "cli": "az",
+    "frontend_host": "GitHub Pages (https://assin.art)",
+    "frontend_www_host": "https://www.assin.art",
+    "backend_host": "Azure App Service Linux (PHP 8.3)",
+    "require_https": true,
+    "frontend_request_timeout_ms": 10000,
+    "max_upload_sizes_kb": {
+      "avatar": 5120,
+      "cover": 10240,
+      "background_wallpaper": 10240,
+      "button_image": 5120
+    }
+  },
+  "repositories": {
+    "backend": {
+      "path": "/data/data/com.termux/files/home/assinart_v1-back",
+      "remote": "https://github.com/pinhogo/assinart_v1-back",
+      "branch": "main",
+      "commit": "e2fc47d",
+      "stack": "PHP ^8.2, Laravel ^11.0, Sanctum ^4.0"
+    },
+    "frontend": {
+      "path": "/data/data/com.termux/files/home/assinart_v1",
+      "remote": "https://github.com/pinhogo/assinart_v1",
+      "branch": "main",
+      "stack": "React 19, Vite 8, TypeScript 6, React Router 7"
+    }
+  },
+  "discovered_codebase_facts": {
+    "auth_mechanism": "bootstrap/app.php desabilitou statefulApi() e isentou api/* de CSRF; frontend envia Authorization: Bearer com credentials='same-origin'. Não depende de cookies cross-site.",
+    "cors_current_state": "config/cors.php já inclui https://assin.art e paths ['api/*', 'sanctum/csrf-cookie', '*'], mas falta https://www.assin.art e leitura dinâmica via env.",
+    "proxy_issue": "bootstrap/app.php não possui $middleware->trustProxies(at: '*'), o que afeta $request->ip() (RateLimiter de login, throttle de /r/{id}, fallback de visitor_id em /api/v1/track) e esquema HTTPS em url('/r/{id}').",
+    "media_storage_risk": "ManagesProfileMedia e ManagesButtonReorderAndImage salvam em avatars/, covers/, wallpapers/ e cards/ no disco 'public' via Storage::url($path). Sem FILESYSTEM_DISK=public e APP_URL=https://..., retorna /storage/... relativo. Symlink para /home/data/storage/app/public é obrigatório para não perder mídia em redeploy ZIP.",
+    "upload_limits_risk": "Capas e backgrounds/wallpapers permitem até 10240 KB (10 MB), acima dos defaults de PHP (2M/8M) e Nginx (1M-2M). Requer ajuste de client_max_body_size e php.ini.",
+    "sqlite_and_migrations_risk": "Existem 10 migrations (incluindo page_views, button_clicks, is_published, shadow_color e normalização de usernames). Não há tabela jobs (usar QUEUE_CONNECTION=sync). page_views e button_clicks gravam a cada visita/clique; manter single instance, SESSION_DRIVER=file e CACHE_STORE=file reduz locks no SQLite em /home/data.",
+    "draft_publication_behavior": "Novas contas iniciam com is_published=false (AuthController::register) e retornam 404 status='draft' em GET /{username} até o artista publicar o perfil.",
+    "bootstrap_cache_risk": "bootstrap/cache/packages.php e services.php estão no Git com providers de require-dev (nunomaduro/collision, nunomaduro/termwind); devem ser removidos antes de composer install --no-dev.",
+    "frontend_workflow_state": "../assinart_v1/.github/workflows/deploy-pages.yml já lê vars.VITE_API_BASE_URL e vars.VITE_USE_MOCK_API."
+  },
+  "azure_target_config": {
+    "resource_group": "rg-assinart-prod",
+    "location": "brazilsouth",
+    "location_fallback": "eastus2",
+    "app_service_plan": "plan-assinart-prod",
+    "sku": "B1",
+    "sku_rationale": "Suporta always_on=true, evitando cold starts > 10s que estourariam o timeout de 10000ms de apiClient.ts.",
+    "webapp_name": "assinart-api",
+    "runtime": "PHP:8.3",
+    "expected_backend_url": "https://assinart-api.azurewebsites.net",
+    "expected_api_base_url": "https://assinart-api.azurewebsites.net/api/v1"
+  },
+  "steps": [
+    {
+      "id": "0_preflight_checks",
+      "title": "Validação de assinatura, região e nome no Azure",
+      "description": "Confirmar acesso ao Azure for Students, disponibilidade do SKU B1 Linux na região escolhida e unicidade do nome do Web App.",
+      "commands_reference": [
+        "az account show --output table",
+        "az appservice list-locations --sku B1 --linux-workers-enabled --output table"
+      ],
+      "acceptance_criteria": [
+        "Assinatura Azure for Students ativa.",
+        "Região suporta Linux B1.",
+        "Nome assinart-api confirmado disponível (ou alternativo definido)."
+      ]
+    },
+    {
+      "id": "1_prepare_backend_code_and_azure_files",
+      "title": "Preparar ajustes Laravel, segurança crítica e arquivos Azure no backend",
+      "description": "Corrigir proxy reverso, CORS, adicionar configuração Nginx/PHP/startup idempotente e endereçar bloqueadores de SECURITY_AUDIT.md antes da exposição pública.",
+      "target_files": [
+        "bootstrap/app.php",
+        "config/cors.php",
+        "azure/nginx.conf",
+        "azure/php-uploads.ini",
+        "azure/startup.sh"
+      ],
+      "actions": [
+        "Adicionar $middleware->trustProxies(at: '*'); em bootstrap/app.php.",
+        "Atualizar config/cors.php para incluir https://www.assin.art e mesclar origens de env('CORS_ALLOWED_ORIGINS').",
+        "Criar azure/nginx.conf com root /home/site/wwwroot/public, client_max_body_size 16M, try_files $uri $uri/ /index.php?$query_string e bloqueio de execução PHP em /storage/.",
+        "Criar azure/php-uploads.ini com upload_max_filesize=12M, post_max_size=16M, memory_limit=256M, max_execution_time=60, expose_php=Off.",
+        "Criar azure/startup.sh idempotente criando /home/data/database.sqlite, /home/data/storage/app/public/{avatars,covers,cards,wallpapers}, symlinks de storage, storage/framework/{sessions,views,cache/data}, php artisan migrate --force e caches Laravel.",
+        "Revisar e corrigir achados críticos/altos de SECURITY_AUDIT.md (SEC-01 a SEC-05 e novos achados pós-merge).",
+        "Executar suíte completa php artisan test."
+      ],
+      "acceptance_criteria": [
+        "Toda a suíte php artisan test passa com exit code 0.",
+        "azure/startup.sh tem permissão executável (+x) e não contém segredos."
+      ]
+    },
+    {
+      "id": "2_provision_azure_infrastructure",
+      "title": "Provisionar Resource Group, App Service Plan e Web App PHP 8.3",
+      "description": "Criar recursos no Azure via az CLI com HTTPS obrigatório, Always On, TLS 1.2+ e logs habilitados.",
+      "commands_reference": [
+        "az group create --name rg-assinart-prod --location brazilsouth",
+        "az appservice plan create --name plan-assinart-prod --resource-group rg-assinart-prod --location brazilsouth --sku B1 --is-linux",
+        "az webapp create --resource-group rg-assinart-prod --plan plan-assinart-prod --name assinart-api --runtime \"PHP:8.3\"",
+        "az webapp update --resource-group rg-assinart-prod --name assinart-api --https-only true",
+        "az webapp config set --resource-group rg-assinart-prod --name assinart-api --always-on true --ftps-state Disabled --min-tls-version 1.2 --http20-enabled true --startup-file \"/home/site/wwwroot/azure/startup.sh\"",
+        "az webapp log config --resource-group rg-assinart-prod --name assinart-api --application-logging filesystem --level information --web-server-logging filesystem"
+      ],
+      "acceptance_criteria": [
+        "Web App assinart-api criado com runtime PHP:8.3, https-only=true e always-on=true.",
+        "Startup file configurado para /home/site/wwwroot/azure/startup.sh."
+      ]
+    },
+    {
+      "id": "3_configure_app_settings_and_startup",
+      "title": "Configurar variáveis de ambiente de produção no App Service",
+      "description": "Gerar APP_KEY segura e aplicar App Settings necessárias para Laravel 11, SQLite persistente, Storage público e logs.",
+      "commands_reference": [
+        "APP_KEY=\"base64:$(openssl rand -base64 32)\"",
+        "az webapp config appsettings set --resource-group rg-assinart-prod --name assinart-api --settings APP_NAME=Assinart APP_ENV=production APP_DEBUG=false APP_KEY=\"$APP_KEY\" APP_TIMEZONE=America/Sao_Paulo APP_LOCALE=pt_BR APP_URL=https://assinart-api.azurewebsites.net FRONTEND_URL=https://assin.art CORS_ALLOWED_ORIGINS=https://assin.art,https://www.assin.art SANCTUM_STATEFUL_DOMAINS=assin.art,www.assin.art DB_CONNECTION=sqlite DB_DATABASE=/home/data/database.sqlite FILESYSTEM_DISK=public SESSION_DRIVER=file CACHE_STORE=file QUEUE_CONNECTION=sync LOG_CHANNEL=stderr LOG_LEVEL=warning MAIL_MAILER=log WEBSITES_ENABLE_APP_SERVICE_STORAGE=true PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d:/home/site/wwwroot/azure"
+      ],
+      "acceptance_criteria": [
+        "APP_DEBUG=false e APP_ENV=production definidos.",
+        "FILESYSTEM_DISK=public e APP_URL apontam para https://assinart-api.azurewebsites.net.",
+        "WEBSITES_ENABLE_APP_SERVICE_STORAGE=true e DB_DATABASE=/home/data/database.sqlite definidos."
+      ]
+    },
+    {
+      "id": "4_package_and_deploy_backend",
+      "title": "Empacotar build limpo sem devDependencies e publicar no Azure",
+      "description": "Exportar código limpo, remover bootstrap/cache/*.php e database.sqlite local, instalar vendor --no-dev e publicar via az webapp deploy.",
+      "commands_reference": [
+        "az webapp deploy --resource-group rg-assinart-prod --name assinart-api --src-path /tmp/assinart-back.zip --type zip",
+        "az webapp log tail --resource-group rg-assinart-prod --name assinart-api",
+        "curl -fsS https://assinart-api.azurewebsites.net/up",
+        "curl -fsS \"https://assinart-api.azurewebsites.net/api/v1/usernames/check?username=teste_deploy\"",
+        "curl -i -X OPTIONS https://assinart-api.azurewebsites.net/api/v1/auth/login -H \"Origin: https://assin.art\" -H \"Access-Control-Request-Method: POST\" -H \"Access-Control-Request-Headers: Content-Type, Authorization\""
+      ],
+      "acceptance_criteria": [
+        "Todas as 10 migrations aplicadas em /home/data/database.sqlite.",
+        "GET /up retorna HTTP 200 e OPTIONS preflight retorna HTTP 204 para https://assin.art."
+      ]
+    },
+    {
+      "id": "5_connect_frontend_github_pages",
+      "title": "Conectar frontend (assinart_v1) no GitHub Pages à API em produção",
+      "description": "Configurar Repository Variables no GitHub para o workflow deploy-pages.yml construir o bundle Vite com API real e useMockApi=false.",
+      "target_file": "../assinart_v1/.github/workflows/deploy-pages.yml",
+      "build_env": {
+        "VITE_API_BASE_URL": "https://assinart-api.azurewebsites.net/api/v1",
+        "VITE_USE_MOCK_API": "false"
+      },
+      "commands_reference": [
+        "gh variable set VITE_API_BASE_URL --repo pinhogo/assinart_v1 --body \"https://assinart-api.azurewebsites.net/api/v1\"",
+        "gh variable set VITE_USE_MOCK_API --repo pinhogo/assinart_v1 --body \"false\"",
+        "gh workflow run deploy-pages.yml --repo pinhogo/assinart_v1 --ref main"
+      ],
+      "acceptance_criteria": [
+        "Workflow Deploy to GitHub Pages concluído com sucesso.",
+        "Bundle publicado em https://assin.art usa a API real sem mockAdapter."
+      ]
+    },
+    {
+      "id": "6_e2e_verification_and_smoke_tests",
+      "title": "Validar fluxo End-to-End em aba anônima e persistência pós-restart",
+      "description": "Testar cadastro, onboarding, upload de avatar/capa/wallpaper > 2MB, publicação (is_published=true), perfil público, telemetria /track, métricas /metrics/summary e persistência pós-restart.",
+      "acceptance_criteria": [
+        "Zero erros de CORS, Mixed Content ou timeouts (> 10s).",
+        "Perfil publicado responde 200 em /{username}, POST /api/v1/track retorna 204 e /metrics/summary consolida pageviews/cliques.",
+        "Uploads e registros SQLite persistem após az webapp restart."
+      ]
+    }
+  ],
+  "production_env_vars": {
+    "APP_NAME": "Assinart",
+    "APP_ENV": "production",
+    "APP_DEBUG": "false",
+    "APP_KEY": "<gerada via openssl rand -base64 32 no momento do deploy>",
+    "APP_TIMEZONE": "America/Sao_Paulo",
+    "APP_LOCALE": "pt_BR",
+    "APP_URL": "https://assinart-api.azurewebsites.net",
+    "FRONTEND_URL": "https://assin.art",
+    "CORS_ALLOWED_ORIGINS": "https://assin.art,https://www.assin.art",
+    "SANCTUM_STATEFUL_DOMAINS": "assin.art,www.assin.art",
+    "DB_CONNECTION": "sqlite",
+    "DB_DATABASE": "/home/data/database.sqlite",
+    "FILESYSTEM_DISK": "public",
+    "SESSION_DRIVER": "file",
+    "CACHE_STORE": "file",
+    "QUEUE_CONNECTION": "sync",
+    "LOG_CHANNEL": "stderr",
+    "LOG_LEVEL": "warning",
+    "MAIL_MAILER": "log",
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE": "true",
+    "PHP_INI_SCAN_DIR": "/usr/local/etc/php/conf.d:/home/site/wwwroot/azure"
+  },
+  "rollback_plan": {
+    "frontend": "Alterar GitHub Variable VITE_USE_MOCK_API para 'true' e reexecutar deploy-pages.yml para restaurar o modo demo imediatamente.",
+    "backend": "Manter cópia de /home/data/database.sqlite antes de novas migrations e reimplantar o ZIP anterior estável via az webapp deploy --type zip."
+  },
+  "post_mvp_recommendations": [
+    "Configurar domínio customizado https://api.assin.art (CNAME + Azure Managed Certificate).",
+    "Migrar SQLite em /home/data para Azure Database for PostgreSQL ou MySQL Flexible Server (recomendado pelo volume de inserts em page_views e button_clicks).",
+    "Migrar disco 'public' local para Azure Blob Storage / S3 compatível.",
+    "Integrar provedor SMTP transacional real para ativar envio em forgot-password e email/resend."
+  ]
+}

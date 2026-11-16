@@ -213,3 +213,29 @@
     - [x] Cubra `circular_icon_background` hexadecimal do artista como fallback em `PublicProfileTest`.
     - [x] Atualize o contrato de `circular_links[]` na seção 7.1 de `context/api_contracts.md`.
   - **Critério de aceite:** `resolved_circular_bg` retorna `#ACE1AF` para botão circular com `button_color` hexadecimal válido. Execução de `php artisan test` fica a cargo do orquestrador.
+
+---
+
+## Fase 8: Infraestrutura de Produção no Azure (`BACKLOG - FLUXO B`)
+
+> Spec completa em `assinart_v1/context/BACKLOG_MELHORIAS.md` e nas Issues `#327` / `#328`. SQLite fica restrito ao dev local e ao `phpunit.xml`.
+
+- [ ] **Task 8.1 (`#327` / `API-12`): Banco de Produção no Azure e SQLite Apenas em Dev**
+  - **Arquivos:** `.env.example`, `config/database.php` *(a publicar)*, `database/migrations/`, `phpunit.xml`, `bootstrap/app.php`
+  - **Escopo:**
+    - [ ] Publique `config/database.php` e configure SSL/TLS via ambiente para Azure PostgreSQL ou MySQL.
+    - [ ] Crie migration para `jobs`, `job_batches` e `failed_jobs` ou alinhe `QUEUE_CONNECTION`.
+    - [ ] Atualize `.env.example` restringindo SQLite ao dev local.
+    - [ ] Audite migrations e `LOWER(username)` em `UsernameController.php` e `ArtistUsername.php` no SGBD alvo.
+    - [ ] Valide `/up` com conexão ao banco e execute `migrate:fresh --seed` no ambiente alvo.
+    - [ ] Atualize testes PHPUnit e `context/data_dictionary.md`.
+
+- [ ] **Task 8.2 (`#328` / `API-13`): Storage de Mídia no Azure Blob Storage**
+  - **Arquivos:** `composer.json`, `config/filesystems.php`, `.env.example`, `app/Http/Controllers/Api/Concerns/InteractsWithMediaStorage.php`, `ManagesProfileMedia.php`, `ManagesButtonReorderAndImage.php`, `app/Http/Controllers/Api/ButtonController.php`, `app/Http/Requests/UpdateProfileRequest.php`
+  - **Escopo:**
+    - [ ] Adicione adapter Flysystem Azure Blob e registre disco `azure` em `config/filesystems.php`.
+    - [ ] Configure `MEDIA_DISK` e `AZURE_STORAGE_*` em `.env.example`.
+    - [ ] Centralize disco de mídia e extração de path em `InteractsWithMediaStorage.php`.
+    - [ ] Remova hardcode de `disk('public')` e `'/storage/'` nos Concerns e em `ButtonController.php`.
+    - [ ] Revise `UpdateProfileRequest.php` e documente CORS e acesso público do container.
+    - [ ] Atualize `MediaStorageTest.php`, `BackgroundMediaTest.php` e `AccountDeletionTest.php`.
