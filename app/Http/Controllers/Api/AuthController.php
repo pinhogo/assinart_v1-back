@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Models\Artist;
+use App\Services\EmailVerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ class AuthController extends Controller
 {
     use ManagesPasswordAndEmail, InteractsWithMediaStorage;
 
-    public function register(RegisterRequest $request): JsonResponse
+    public function register(RegisterRequest $request, EmailVerificationService $verificationService): JsonResponse
     {
         $cleanUsername = ltrim(strtolower(trim($request->input('username'))), '@');
 
@@ -40,6 +41,7 @@ class AuthController extends Controller
         ]);
 
         $artist = $artist->fresh() ?? $artist;
+        $verificationService->sendVerificationEmail($artist);
 
         return $this->respondWithArtistSession($artist, 'Conta criada com sucesso.', 201);
     }
@@ -86,7 +88,7 @@ class AuthController extends Controller
             'token' => $token,
             'artist' => $artist,
             'data' => [
-                'user' => $artist->only(['id', 'name', 'username', 'email', 'is_published', 'publication_status']),
+                'user' => $artist->only(['id', 'name', 'username', 'email', 'email_verified_at', 'is_published', 'publication_status']),
                 'token' => $token,
             ],
         ], $status);

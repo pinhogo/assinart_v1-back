@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\Artist;
+use App\Services\EmailVerificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -110,13 +111,13 @@ trait ManagesPasswordAndEmail
     }
 
     /**
-     * Reenvia e-mail de confirmação com throttling estrito de 60 segundos.
+     * Reenvia e-mail de confirmação com throttling estrito de 60 segundos e sem enumeração.
      */
-    public function resendVerification(Request $request): JsonResponse
+    public function resendVerification(Request $request, EmailVerificationService $verificationService): JsonResponse
     {
         $user = $request->user('sanctum') ?? $request->user();
         $ip = $request->ip() ?? '127.0.0.1';
-        $email = strtolower(trim((string) $request->input('email', '')));
+        $email = $verificationService->normalizeEmail((string) $request->input('email', ''));
         $identifier = $user?->id ?? ($ip . '|' . $email);
         $throttleKey = 'resend-email-verification|' . $identifier;
 
@@ -131,50 +132,23 @@ trait ManagesPasswordAndEmail
 
         RateLimiter::hit($throttleKey, 60);
 
+        $artist = $user ?? ($email !== '' ? Artist::where('email', $email)->first() : null);
+
+        if ($artist && $artist->email_verified_at === null) {
+            $verificationService->sendVerificationEmail($artist);
+        }
+
         return response()->json([
             'status' => 'success',
-            'message' => 'E-mail de confirmação reenviado.',
+            'message' => 'Se o e-mail estiver cadastrado e ainda não confirmado, enviaremos um novo link de confirmação.',
         ], 200);
     }
 
     /**
-     * Confirma o e-mail do artista mediante URL assinada válida.
+     * Confirma o e-mail do artista via token SHA-256 ({ email, token }) ou URL assinada válida.
      */
-    public function verifyEmail(Request $request): JsonResponse
+    public function verifyEmail(Request $request, EmailVerificationService $verificationService): JsonResponse
     {
-        if (!$request->hasValidSignature()) {
-            return $this->invalidVerificationResponse();
-        }
-
-        $artist = $request->user('sanctum') ?? $request->user();
-
-        if (!$artist && $request->filled('id')) {
-            $artist = Artist::find($request->input('id'));
-        }
-
-        if (!$artist && $request->filled('email')) {
-            $artist = Artist::where('email', strtolower(trim((string) $request->input('email'))))->first();
-        }
-
-        if (!$artist || ($request->filled('hash') && !hash_equals(sha1(strtolower(trim($artist->email))), (string) $request->input('hash')))) {
-            return $this->invalidVerificationResponse();
-        }
-
-        $artist->email_verified_at = now();
-        $artist->save();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'E-mail confirmado com sucesso.',
-            'email_verified_at' => $artist->email_verified_at,
-        ], 200);
-    }
-
-    private function invalidVerificationResponse(): JsonResponse
-    {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Link de verificação inválido ou expirado.',
-        ], 403);
+        return $verificationService->verifyFromRequest($request);
     }
 }
