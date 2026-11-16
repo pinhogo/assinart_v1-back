@@ -51,12 +51,8 @@ jobs:
 
           composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-          # Pré-gera caches que não dependem de secrets/App Settings de runtime
-          APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
-            php artisan route:cache
-          APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
-            php artisan view:cache
-          rm -f bootstrap/cache/config.php .env*
+          # Nao pre-gerar route:cache/view:cache no runner para evitar paths temporarios (/home/runner/work/_temp/...)
+          rm -f bootstrap/cache/*.php .env*
 
           chmod +x azure/startup.sh azure/backup.sh azure/provision.sh
 
