@@ -115,6 +115,16 @@ az webapp config set \
   --startup-file "/home/site/wwwroot/azure/startup.sh" \
   --output table
 
+# Libera autenticação básica no endpoint Kudu/SCM para deploy via Publish Profile no GitHub Actions
+az resource update \
+  --resource-group "${RG}" \
+  --name scm \
+  --namespace Microsoft.Web \
+  --resource-type basicPublishingCredentialsPolicies \
+  --parent "sites/${APP_NAME}" \
+  --set properties.allow=true \
+  --output none || true
+
 if [ "${DB_CONNECTION}" = "pgsql" ]; then
   echo "6.5. Provisionando Azure Database for PostgreSQL Flexible Server (${PG_SERVER_NAME}, ${PG_SKU})..."
   if az postgres flexible-server show --resource-group "${RG}" --name "${PG_SERVER_NAME}" >/dev/null 2>&1; then

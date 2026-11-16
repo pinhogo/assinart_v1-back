@@ -38,9 +38,7 @@ fi
 cd "${APP_ROOT}"
 php artisan migrate --force
 php artisan config:cache
-if [ ! -f "${APP_ROOT}/bootstrap/cache/routes-v7.php" ]; then
-  php artisan route:cache
-fi
+php artisan route:cache
 php artisan view:cache
 
 # 5. Aplica configuração do Nginx e recarrega (validar comportamento de reload no App Service real)
