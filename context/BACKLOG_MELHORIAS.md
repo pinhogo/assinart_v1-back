@@ -1780,12 +1780,12 @@
 
 ---
 
-## ✉️ Confirmação de E-mail e Redirecionamento Pós-Login — `BACKLOG - FLUXO B`
+## ✉️ Confirmação de E-mail, Contato e Carga Containerizada (`API-20..21 DONE` | `API-22..23 FLUXO E`)
 
 ### [API-20] Enviar E-mail de Confirmação Real e Validar o Token em /auth/email/verify
 
-- **Estado no Backlog:** Pendente
-- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `GLB (Global)` | Etapa `Fluxo B (Planejado)` (`https://github.com/users/pinhogo/projects/2`)
+- **Estado no Backlog:** Concluída (`1cbcb08` em `develop` via Orca `run_58b77ee84902` — `447 passed, 3 skipped`)
+- **GitHub Project (#2):** Status `DONE` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/3)
 
 **Contexto Bruto:**
 
@@ -1818,8 +1818,8 @@
 
 ### [API-21] Bloquear a Publicação do Perfil sem E-mail Verificado
 
-- **Estado no Backlog:** Pendente
-- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `GLB (Global)` | Etapa `Fluxo B (Planejado)` (`https://github.com/users/pinhogo/projects/2`)
+- **Estado no Backlog:** Concluída (`2866d18` em `develop` via Orca `run_58b77ee84902` — `454 passed, 3 skipped`)
+- **GitHub Project (#2):** Status `DONE` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/2)
 
 **Contexto Bruto:**
 
@@ -1847,8 +1847,8 @@
 
 ### [API-22] Ativar E-mail de Contato (`sac@assin.art`) com Encaminhamento para Gmail Pessoal
 
-- **Estado no Backlog:** Pendente
-- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `GLB (Global)` | Etapa `Fluxo B (Planejado)` (`https://github.com/users/pinhogo/projects/2`)
+- **Estado no Backlog:** Preparação versionável integrada (`763d540` em `develop`); aguardando configuração manual de DNS na **Hostinger** e validação de entrega no Gmail (`API-22.1..22.4`, `API-22.7`)
+- **GitHub Project (#2):** Status `TESTES, PLAYGROUND E DOCUMENTAÇÃO - FLUXO E` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/4)
 
 **Contexto Bruto:**
 
@@ -1890,8 +1890,8 @@
 
 ### [API-23] Simular Teste de Carga Local em Container com Limites do Azure App Service (B1)
 
-- **Estado no Backlog:** Pendente *(Issue `pinhogo/assinart_v1-back#20`)*
-- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `GLB (Global)` | Etapa `Fluxo B (Planejado)` (https://github.com/pinhogo/assinart_v1-back/issues/20)
+- **Estado no Backlog:** Infraestrutura de simulação integrada (`0905945` em `develop`); aguardando inicialização de `docker.socket`/`docker.service` para executar ao vivo (`API-23.5`)
+- **GitHub Project (#2):** Status `TESTES, PLAYGROUND E DOCUMENTAÇÃO - FLUXO E` | Domínio `GLB (Global)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1-back/issues/20)
 
 **Contexto Bruto:**
 

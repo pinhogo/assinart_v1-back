@@ -320,44 +320,44 @@
 
 ---
 
-## Fase 10: Confirmação de E-mail e E-mail de Contato (`BACKLOG - FLUXO B`)
+## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20..21 DONE`; `API-22..23 FLUXO E`)
 
-> Origem: `context/BACKLOG_MELHORIAS.md` (`API-20`, `API-21`, `API-22`) e `assinart_v1/context/BACKLOG_MELHORIAS.md` (`CAD-11`, `FIX-GLB-22`).
-> `API-20` sobrepõe parte de `SEC-14` (`SEC-01`); não execute as duas em paralelo.
+> Origem: `context/BACKLOG_MELHORIAS.md` (`API-20`, `API-21`, `API-22`, `API-23`) e `assinart_v1/context/BACKLOG_MELHORIAS.md` (`CAD-11`, `FIX-GLB-22`).
+> Executado via Orca (`run_58b77ee84902`). `API-20` e `API-21` concluídas em `DONE`; `API-22` e `API-23` seguem em `FLUXO E` aguardando configuração DNS na Hostinger e execução ao vivo no daemon Docker.
 
-- [ ] **Task 10.1 (`API-20`): E-mail de Confirmação Real e Validação de Token**
-  - **Arquivos:** `database/migrations/`, `app/Mail/VerifyEmailMail.php`, `resources/views/emails/verify-email.blade.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php`, `app/Http/Controllers/Api/OnboardingController.php`, `routes/api_auth.php`, `.env.example`, `tests/Feature/EmailVerificationTest.php`
+- [x] **Task 10.1 (`#3` / `API-20`): E-mail de Confirmação Real e Validação de Token**
+  - **Arquivos:** `database/migrations/2026_11_16_000001_create_email_verification_tokens_table.php`, `app/Mail/VerifyEmailMail.php`, `resources/views/emails/verify-email.blade.php`, `app/Services/EmailVerificationService.php`, `config/app.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php`, `.env.example`, `tests/Feature/EmailVerificationTest.php`, `context/api_contracts.md`, `context/data_dictionary.md`
   - **Escopo:**
-    - [ ] Crie a migration `email_verification_tokens` (`email`, `token_hash`, `expires_at`, `created_at`).
-    - [ ] Crie `VerifyEmailMail` com link `FRONTEND_URL/confirmacao-email?email=...&token=...`.
-    - [ ] Dispare o e-mail em `register` e em `resendVerification` com throttle de 60 s por e-mail.
-    - [ ] Valide `email` e `token` em `POST /api/v1/auth/email/verify` e invalide o token após uso.
-    - [ ] Remova a auto-verificação de `email_verified_at` em `OnboardingController::saveButtons`.
-    - [ ] Cubra todo o fluxo com `Mail::fake()` em `tests/Feature/EmailVerificationTest.php`.
-  - **Critério de aceite:** Conta nova mantém `email_verified_at = null` até validar o token recebido por e-mail.
+    - [x] Crie a migration `email_verification_tokens` (`email`, `token_hash`, `expires_at`, `created_at`).
+    - [x] Crie `VerifyEmailMail` com link `FRONTEND_URL/confirmacao-email?email=...&token=...`.
+    - [x] Dispare o e-mail em `register` e em `resendVerification` com throttle de 60 s e resposta genérica anti-enumeração.
+    - [x] Valide `email` e `token` em `POST /api/v1/auth/email/verify` (`422` se inválido/expirado) preservando suporte legado a `hasValidSignature()`.
+    - [x] Remova a auto-verificação de `email_verified_at` em `OnboardingController::saveButtons`.
+    - [x] Cubra todo o fluxo com `Mail::fake()` em `tests/Feature/EmailVerificationTest.php`.
+  - **Critério de aceite:** Conta nova mantém `email_verified_at = null` até validar o token recebido por e-mail. (`447 passed, 3 skipped`).
 
-- [ ] **Task 10.2 (`API-21`): Bloqueio de Publicação sem E-mail Verificado**
-  - **Arquivos:** `app/Http/Requests/UpdateProfileRequest.php`, `app/Http/Controllers/Api/ProfileController.php`, `tests/Feature/ProfilePublicationTest.php`
+- [x] **Task 10.2 (`#2` / `API-21`): Bloqueio de Publicação sem E-mail Verificado**
+  - **Arquivos:** `app/Http/Controllers/Api/ProfileController.php`, `tests/Feature/ProfilePublicationTest.php`, `tests/Feature/UsernameNormalizationTest.php`, `context/api_contracts.md`
   - **Escopo:**
-    - [ ] Rejeite `is_published: true` / `publication_status: 'published'` com `422` (`code: email_not_verified`) enquanto `email_verified_at` for nulo.
-    - [ ] Mantenha rotas de onboarding e rascunho liberadas antes da confirmação.
-    - [ ] Cubra o bloqueio e a liberação pós-verificação em `ProfilePublicationTest.php`.
-  - **Critério de aceite:** Conta não verificada recebe `422` ao tentar publicar e `200` após confirmar o e-mail.
+    - [x] Rejeite `is_published: true` / `publication_status: 'published'` com `422` (`code: email_not_verified`) enquanto `email_verified_at` for nulo.
+    - [x] Mantenha rotas de onboarding e rascunho liberadas antes da confirmação.
+    - [x] Cubra o bloqueio e a liberação pós-verificação em `ProfilePublicationTest.php`.
+  - **Critério de aceite:** Conta não verificada recebe `422` ao tentar publicar e `200` após confirmar o e-mail. (`454 passed, 3 skipped`).
 
-- [ ] **Task 10.3 (`API-22`): Roteamento de `sac@assin.art` e `contato@assin.art` para Gmail Pessoal**
-  - **Arquivos:** `.env.example`, `context/DEPLOY_PLAN.md`
+- [ ] **Task 10.3 (`#4` / `API-22`): Roteamento de `sac@assin.art` e `contato@assin.art` para Gmail Pessoal (`FLUXO E` — aguarda painel Hostinger)**
+  - **Arquivos:** `.env.example`, `azure/appsettings.example.env`, `config/mail.php`, `tests/Feature/MailConfigTest.php`, `context/DEPLOY_PLAN.md`
   - **Escopo:**
-    - [ ] Configure Cloudflare Email Routing ou ImprovMX para `sac@assin.art` e `contato@assin.art` encaminhando ao Gmail pessoal (sem commitar o Gmail no Git).
-    - [ ] Publique `MX`, `SPF` e `DMARC` no DNS de `assin.art` alinhados ao provedor transacional de `API-20`.
-    - [ ] Alinhe `MAIL_FROM_ADDRESS` e `MAIL_REPLY_TO_ADDRESS` em `.env.example` e documente o DNS em `context/DEPLOY_PLAN.md`.
+    - [ ] Configure Cloudflare Email Routing ou ImprovMX na Hostinger para `sac@assin.art` e `contato@assin.art` encaminhando ao Gmail pessoal (sem commitar o Gmail no Git).
+    - [ ] Publique `MX`, `SPF`, `DKIM` e `DMARC` no DNS de `assin.art` (Hostinger) alinhados ao provedor transacional de `API-20`.
+    - [x] Alinhe `MAIL_FROM_ADDRESS` e `MAIL_REPLY_TO_ADDRESS` em `.env.example`/`config/mail.php` e documente o passo a passo gratuito para Hostinger em `context/DEPLOY_PLAN.md`.
     - [ ] Valide com `dig MX assin.art` e envio de e-mail externo real para `sac@assin.art`.
   - **Critério de aceite:** E-mail enviado para `sac@assin.art` chega à caixa do Gmail pessoal sem erro de DNS/SPF.
 
-- [ ] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`)**
-  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/compose.yml`, `scripts/load-test-azure-sim.sh`, `context/DEPLOY_PLAN.md`
+- [ ] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`) (`FLUXO E` — aguarda daemon Docker ativo)**
+  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/entrypoint.sh`, `docker/azure-sim/compose.yml`, `.dockerignore`, `scripts/load-test-azure-sim.sh`, `tests/Feature/AzureSimContainerConfigTest.php`, `context/DEPLOY_PLAN.md`
   - **Escopo:**
-    - [ ] Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx reproduzindo `azure/nginx.conf`, `public/.user.ini` e o boot equivalente ao `azure/startup.sh`.
-    - [ ] Crie `docker/azure-sim/compose.yml` com limites do SKU `B1` (`1.0` vCPU, `1792 MB` RAM, 1 instância) e volume persistente em `/home/data` (com modo SQLite `WAL` e opção PostgreSQL).
-    - [ ] Crie `scripts/load-test-azure-sim.sh` para carga concorrente simultânea em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
-    - [ ] Execute a bateria (em host/runner com Docker) e registre p50/p95, taxa de erro e o gatilho empírico de migração para `API-12` (PostgreSQL) em `context/DEPLOY_PLAN.md`.
+    - [x] Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx reproduzindo `azure/nginx.conf`, `public/.user.ini` e o boot equivalente ao `azure/startup.sh`.
+    - [x] Crie `docker/azure-sim/compose.yml` com limites do SKU `B1` (`1.0` vCPU, `1792 MB` RAM, 1 instância) e volume persistente em `/home/data` (com modo SQLite `WAL` e profile `postgres`).
+    - [x] Crie `scripts/load-test-azure-sim.sh` para carga concorrente simultânea em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
+    - [ ] Execute a bateria ao vivo no Docker (`docker.service` ativo) e registre p50/p95, taxa de erro e o gatilho empírico de migração para `API-12` (PostgreSQL) em `context/DEPLOY_PLAN.md`.
   - **Critério de aceite:** Ambiente limitado a `1 vCPU / 1,75 GB` sobe com os mesmos configs do `azure/` e conclui carga concorrente registrando latência, `0` erros `5xx` e evidência sobre locks do SQLite vs PostgreSQL.

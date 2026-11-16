@@ -8,8 +8,8 @@
 
 ## Status Geral da Auditoria
 
-- **Total inspecionado em `app/` (2026-11-15 pós-lote `SEC-*` + `API-14..19`):** **35 arquivos PHP**.
-- **Conformes ao limite efetivo (≤ 150 linhas efetivas):** **35 de 35 arquivos (100% conforme)**.
+- **Total inspecionado em `app/` (2026-11-16 pós-lote `API-20..23`):** **37 arquivos PHP**.
+- **Conformes ao limite efetivo (≤ 150 linhas efetivas):** **37 de 37 arquivos (100% conforme)**.
 - **Arquivos Críticos Refatorados (≤ 150 linhas efetivas):**
   - ✅ [`app/Http/Controllers/Api/OnboardingController.php`](../app/Http/Controllers/Api/OnboardingController.php) (483 brutas / 391 efetivas ➔ **154 brutas / 126 efetivas**; extraído [`OnboardingPlatformUrlFormatter.php`](../app/Support/OnboardingPlatformUrlFormatter.php)).
   - ✅ [`app/Http/Controllers/Api/ButtonController.php`](../app/Http/Controllers/Api/ButtonController.php) (225 ➔ 206 ➔ **139 brutas / 113 efetivas**; helpers e validação de seção movidos para [`ManagesButtonReorderAndImage.php`](../app/Http/Controllers/Api/Concerns/ManagesButtonReorderAndImage.php)).
@@ -32,13 +32,15 @@
 | # | Arquivo | Meta | Bruto | Efetivo | Situação | Observação |
 |---|---|---|---|---|---|---|
 | 1 | `app/Services/ButtonOrderService.php` | ≤ 150 | **231** | **145** | ✅ **CONFORME** | Próximo ao teto efetivo (145/150); vigiar novas adições. |
-| 2 | `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php` | ≤ 150 | **180** | **141** | ✅ **CONFORME** | Trait de recuperação de senha e verificação assinada dentro do teto efetivo. |
-| 3 | `app/Http/Controllers/Api/Concerns/InteractsWithMediaStorage.php` | ≤ 150 | **176** | **142** | ✅ **CONFORME** | Centraliza disco `MEDIA_DISK`, extração Azure/local e guarda anti-IDOR dentro do teto efetivo. |
+| 2 | `app/Http/Controllers/Api/Concerns/InteractsWithMediaStorage.php` | ≤ 150 | **176** | **142** | ✅ **CONFORME** | Centraliza disco `MEDIA_DISK`, extração Azure/local e guarda anti-IDOR dentro do teto efetivo. |
+| 3 | `app/Services/EmailVerificationService.php` | ≤ 150 | **173** | **137** | ✅ **CONFORME** | Criado na `API-20` para gerar/validar tokens SHA-256 de verificação e envio de e-mail dentro do teto efetivo. |
 | 4 | `app/Support/OnboardingPlatformUrlFormatter.php` | ≤ 150 | **167** | **142** | ✅ **CONFORME** | Extraído de `OnboardingController.php` dentro do teto efetivo. |
 | 5 | `app/Http/Requests/OnboardingLinksRequest.php` | ≤ 150 | **164** | **124** | ✅ **CONFORME** | Normalização de rascunho e validação de links dentro do teto efetivo. |
-| 6 | `app/Http/Controllers/Api/AuthController.php` | ≤ 150 | **156** | **131** | ✅ **CONFORME** | Auth core com rate limit `email+ip` e logout global dentro do teto efetivo. |
+| 6 | `app/Http/Controllers/Api/AuthController.php` | ≤ 150 | **158** | **133** | ✅ **CONFORME** | Auth core com disparo `VerifyEmailMail` no registro e refresh em `/me` dentro do teto efetivo. |
 | 7 | `app/Http/Requests/UpdateProfileRequest.php` | ≤ 150 | **155** | **134** | ✅ **CONFORME** | Validação anti-IDOR, SVG base64 e `HexColor` dentro do teto efetivo. |
-| 8 | `app/Models/Artist.php` | ≤ 150 | **151** | **130** | ✅ **CONFORME** | Model principal com accessors polimórficos dentro do teto efetivo. |
+| 8 | `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php` | ≤ 150 | **154** | **120** | ✅ **CONFORME** | Delega verificação ao `EmailVerificationService` reduzindo de 141 para 120 efetivas. |
+| 9 | `app/Http/Controllers/Api/OnboardingController.php` | ≤ 150 | **154** | **126** | ✅ **CONFORME** | Extraído `OnboardingPlatformUrlFormatter`; mantém `email_verified_at` nulo ao concluir onboarding. |
+| 10 | `app/Models/Artist.php` | ≤ 150 | **151** | **130** | ✅ **CONFORME** | Model principal com accessors polimórficos dentro do teto efetivo. |
 
 ### 1.3 Demais Arquivos de `app/` (≤ 150 linhas brutas e efetivas)
 
@@ -48,7 +50,7 @@
 | 2 | `app/Http/Requests/OnboardingButtonsRequest.php` | Request | 133 | 101 | ✅ **CONFORME** |
 | 3 | `app/Models/Button.php` | Model | 129 | 109 | ✅ **CONFORME** |
 | 4 | `app/Http/Controllers/Concerns/AggregatesMetrics.php` | Concern | 117 | 103 | ✅ **CONFORME** |
-| 5 | `app/Http/Controllers/Api/ProfileController.php` | Controller | 110 | 95 | ✅ **CONFORME** |
+| 5 | `app/Http/Controllers/Api/ProfileController.php` | Controller | 123 | 106 | ✅ **CONFORME** |
 | 6 | `app/Http/Controllers/Concerns/FormatsPublicProfile.php` | Concern | 106 | 101 | ✅ **CONFORME** |
 | 7 | `app/Rules/ArtistUsername.php` | Rule | 104 | 71 | ✅ **CONFORME** |
 | 8 | `app/Http/Requests/RegisterRequest.php` | Request | 104 | 69 | ✅ **CONFORME** |
@@ -62,13 +64,14 @@
 | 16 | `app/Http/Controllers/Api/V1/UsernameController.php` | Controller | 75 | 56 | ✅ **CONFORME** |
 | 17 | `app/Http/Requests/LoginRequest.php` | Request | 57 | 35 | ✅ **CONFORME** |
 | 18 | `app/Http/Requests/ReorderButtonsRequest.php` | Request | 53 | 35 | ✅ **CONFORME** |
-| 19 | `app/Http/Controllers/RedirectController.php` | Controller | 39 | 27 | ✅ **CONFORME** |
-| 20 | `app/Models/PageView.php` | Model | 37 | 30 | ✅ **CONFORME** |
-| 21 | `app/Rules/HexColor.php` | Rule | 34 | 27 | ✅ **CONFORME** |
-| 22 | `app/Http/Middleware/SecurityHeaders.php` | Middleware | 34 | 22 | ✅ **CONFORME** |
-| 23 | `app/Models/ButtonClick.php` | Model | 32 | 25 | ✅ **CONFORME** |
-| 24 | `app/Http/Requests/TrackEventRequest.php` | Request | 29 | 22 | ✅ **CONFORME** |
-| 25 | `app/Http/Controllers/Controller.php` | Controller | 8 | 5 | ✅ **CONFORME** |
+| 19 | `app/Mail/VerifyEmailMail.php` | Mail | 52 | 35 | ✅ **CONFORME** |
+| 20 | `app/Http/Controllers/RedirectController.php` | Controller | 39 | 27 | ✅ **CONFORME** |
+| 21 | `app/Models/PageView.php` | Model | 37 | 30 | ✅ **CONFORME** |
+| 22 | `app/Rules/HexColor.php` | Rule | 34 | 27 | ✅ **CONFORME** |
+| 23 | `app/Http/Middleware/SecurityHeaders.php` | Middleware | 34 | 22 | ✅ **CONFORME** |
+| 24 | `app/Models/ButtonClick.php` | Model | 32 | 25 | ✅ **CONFORME** |
+| 25 | `app/Http/Requests/TrackEventRequest.php` | Request | 29 | 22 | ✅ **CONFORME** |
+| 26 | `app/Http/Controllers/Controller.php` | Controller | 8 | 5 | ✅ **CONFORME** |
 
 ---
 
@@ -86,3 +89,7 @@
 | `routes/api_auth.php`, `routes/web_public.php`, `config/sanctum.php`, `AuthController.php` (131 ef.), `ManagesPasswordAndEmail.php` (141 ef.), `RegisterRequest.php` (69 ef.), `PublicProfileController.php` (79 ef.), `AuthTest.php` & `PublicProfileTest.php` (`d2e55ba`) | `routes/`, `config/`, `app/`, `tests/` | Auth / Throttle / Sanctum / Signed URL | **`SEC-05`, `SEC-06`, `SEC-07`, `SEC-08`, `SEC-14.2`** | ✅ **DONE** | Aplica throttle em `register`/`forgot`/`reset`/`check`/`/{username}`, exige senha `min:8` e `SANCTUM_EXPIRATION`, isola chave `email+ip` no login/resend, implementa logout global (`all`), remove fallback plaintext e exige URL assinada em `verifyEmail`, oculta `artist.id` público. |
 | `HexColor.php` (27 ef.), `TrackEventRequest.php` (22 ef.), `OnboardingPlatformUrlFormatter.php` (142 ef.), `OnboardingController.php` (126 ef.), `ButtonController.php` (113 ef.), `InteractsWithMediaStorage.php` (142 ef.), `ManagesButtonReorderAndImage.php` (111 ef.), `ManagesProfileMedia.php` (73 ef.), `MetricsController.php` (74 ef.), `ProfileController.php` (95 ef.), `RedirectController.php` (27 ef.), `Requests/*`, `Button.php` (109 ef.), `routes/api_{metrics,profile,buttons}.php` & `tests/Feature/*` (`6c281d3`) | `app/`, `routes/`, `tests/` | Anti-IDOR / Telemetria / SVG / HexColor / Refatoração | **`SEC-04`, `SEC-07.3`, `SEC-11`, `SEC-12`, `SEC-14`** | ✅ **DONE** | Refatora `OnboardingController` e `ButtonController` para `≤ 150` ef., bloqueia IDOR em storage/requests, decodifica SVG base64, valida `http(s)` e `HexColor`, filtra `draft`/`is_active` e aplica `throttle` em `/track` e uploads, remove `artist_id`/`clicks_count` de `Button::$fillable`. |
 | `SecurityHeaders.php` (22 ef.), `config/cors.php`, `config/database.php`, `bootstrap/app.php`, `composer.json`, `.gitignore`, `.gitattributes`, `.env.example`, `public/.user.ini`, `azure/*`, `.github/workflows/deploy-backend.yml`, `context/DEPLOY_PLAN.md`, `CorsSecurityTest.php` & `AzureRuntimeAndSecurityTest.php` (`ef99eed`) | `app/Http/Middleware/`, `config/`, `azure/`, `.github/workflows/`, `context/`, `tests/` | CORS / SecurityHeaders / Git Hygiene / Infra Azure | **`SEC-09`, `SEC-10`, `SEC-13` & `API-14`..`API-19`** | ✅ **DONE** | Restringe CORS + SecurityHeaders, exige `ext-fileinfo`/`ext-mbstring` e guarda polyfills a `local`, remove artefatos sensíveis/cache do Git, cria `azure/*`, `.gitattributes`, `.user.ini`, workflow PHP 8.3, ativa SQLite `WAL` (`5000ms`), atualiza `DEPLOY_PLAN.md` e cobre 439 testes aprovados. |
+| `2026_11_16_000001_create_email_verification_tokens_table.php`, `VerifyEmailMail.php` (35 ef.), `verify-email.blade.php`, `EmailVerificationService.php` (137 ef.), `AuthController.php` (133 ef.), `ManagesPasswordAndEmail.php` (120 ef.), `config/app.php`, `.env.example`, `EmailVerificationTest.php`, `api_contracts.md` & `data_dictionary.md` (`1cbcb08`) | `database/migrations/`, `app/`, `resources/views/`, `tests/Feature/`, `context/` | Token Hash / Mailable / Auth / Contratos | **`#3` (`API-20`)** | ✅ **DONE (`447` passed, `3` skipped)** | Cria tabela `email_verification_tokens` (SHA-256), `VerifyEmailMail`, disparo em `register` e `resendVerification` anti-enumeração (`200`/`429`), validação `{ email, token }` (`422`) preservando `hasValidSignature()`, `email_verified_at` em `register`/`login`/`me` e documentação. |
+| `ProfileController.php` (106 ef.), `ProfilePublicationTest.php`, `UsernameNormalizationTest.php` & `api_contracts.md` (`2866d18`) | `app/Http/Controllers/`, `tests/Feature/`, `context/` | Publicação / Validação / Testes | **`#2` (`API-21`)** | ✅ **DONE (`454` passed, `3` skipped)** | Bloqueia `is_published: true` e `publication_status: 'published'` com HTTP `422` (`code: email_not_verified`) enquanto `email_verified_at` for nulo, preservando rascunho/onboarding e cobrindo liberação pós-verificação. |
+| `docker/azure-sim/{Dockerfile,entrypoint.sh,compose.yml}`, `.dockerignore`, `scripts/load-test-azure-sim.sh`, `AzureSimContainerConfigTest.php` & `context/DEPLOY_PLAN.md` (`0905945`) | `docker/`, `scripts/`, `tests/Feature/`, `context/` | Container `B1` / Script de Carga / Docs | **`#20` (`API-23`)** | ⏳ **FLUXO E (aguarda daemon Docker)** | Reproduz Azure `B1` (`1 vCPU / 1792 MB`, PHP 8.3-FPM + Nginx + `/home/data`) e script concorrente (`sqlite` `WAL` e profile `postgres`); infra validada em PHPUnit (`451 passed`); execução ao vivo aguarda `docker.socket`/`docker.service` ativos. |
+| `.env.example`, `azure/appsettings.example.env`, `config/mail.php`, `MailConfigTest.php` & `context/DEPLOY_PLAN.md` (`763d540`) | `.env.example`, `azure/`, `config/`, `tests/Feature/`, `context/` | Config E-mail / Guia DNS Hostinger | **`#4` (`API-22`)** | ⏳ **FLUXO E (aguarda DNS Hostinger)** | Alinha `MAIL_FROM_ADDRESS`/`MAIL_REPLY_TO_ADDRESS`, adiciona `MailConfigTest` (`457 passed, 3 skipped`) e documenta setup gratuito sem e-mail no registrador para **Hostinger** (ImprovMX / Cloudflare Email Routing + Resend/Brevo). |
