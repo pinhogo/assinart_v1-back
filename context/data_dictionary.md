@@ -238,3 +238,41 @@ Registra cliques pontuais de cada link para detalhamento e séries temporais.
 | `visitor_id` | `VARCHAR(64)` | Sim | `NULL` | UUID anônimo do visitante quando disponível. |
 | `clicked_at` | `TIMESTAMP` | Não | `CURRENT_TIMESTAMP` | Carimbo de data/hora do clique. |
 | `created_at` / `updated_at` | `TIMESTAMP` | Sim | `CURRENT_TIMESTAMP` | Carimbos de auditoria. |
+
+---
+
+## 6. Configuração do Banco de Dados por Ambiente
+
+Esta seção descreve como a aplicação usa o banco de dados em cada ambiente.
+
+### 6.1 Isolamento do SQLite
+
+- O SQLite é o banco padrão (`DB_CONNECTION=sqlite`) somente para desenvolvimento local e testes.
+- Os testes automatizados usam `DB_DATABASE=:memory:` (definido em `phpunit.xml`).
+- NÃO use o SQLite em produção.
+- Em produção, defina `DB_CONNECTION=pgsql` ou `DB_CONNECTION=mysql`.
+
+### 6.2 TLS para Azure Database for PostgreSQL e MySQL
+
+A conexão com o banco de produção DEVE usar TLS.
+
+| Variável | Conexão | Descrição |
+|---|---|---|
+| `DB_SSLMODE` | `pgsql` | Modo TLS. Use `require`. Padrão: `prefer`. |
+| `DB_SSLROOTCERT` | `pgsql` | Caminho do certificado raiz (CA). Use com `verify-full`. |
+| `MYSQL_ATTR_SSL_CA` | `mysql`, `mariadb` | Caminho do certificado CA. |
+| `MYSQL_ATTR_SSL_VERIFY_SERVER_CERT` | `mysql`, `mariadb` | Verifica o certificado do servidor. Padrão: `true`. |
+
+- O valor `false` em `MYSQL_ATTR_SSL_VERIFY_SERVER_CERT` é mantido. A configuração remove somente valores `null` e vazios.
+- O endpoint `GET /up` abre uma conexão com o banco. Se a conexão falhar, o endpoint não retorna `200`.
+- O proxy do Azure é confiável (`trustProxies(at: '*')`).
+
+### 6.3 Tabelas de infraestrutura de fila
+
+A migration `0001_01_01_000004_create_jobs_table.php` cria três tabelas. Use `QUEUE_CONNECTION=database` somente após executar esta migration.
+
+| Tabela | Função |
+|---|---|
+| `jobs` | Guarda os jobs pendentes da fila (`queue`, `payload`, `attempts`, `reserved_at`, `available_at`, `created_at`). |
+| `job_batches` | Guarda o estado dos lotes de jobs (`total_jobs`, `pending_jobs`, `failed_jobs`, `cancelled_at`, `finished_at`). |
+| `failed_jobs` | Guarda os jobs que falharam (`uuid` único, `connection`, `queue`, `payload`, `exception`, `failed_at`). |
