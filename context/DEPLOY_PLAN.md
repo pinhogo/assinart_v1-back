@@ -164,8 +164,9 @@ flowchart LR
   1. Validar `az account show`, região/quota Linux `B1` e disponibilidade global do Web App.
   2. Criar Resource Group, App Service Plan `B1 --is-linux --number-of-workers 1` e Web App `PHP:8.3`.
   3. Habilitar `--https-only true`, `--always-on true`, `--ftps-state Disabled`, `--min-tls-version 1.2`, `--http20-enabled true` e `--startup-file /home/site/wwwroot/azure/startup.sh`.
-  4. Configurar App Settings conforme `azure/appsettings.example.env` (incluindo `WEBSITES_CONTAINER_START_TIME_LIMIT=230`, `DB_SQLITE_BUSY_TIMEOUT=5000`, `DB_SQLITE_JOURNAL_MODE=WAL`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`, `LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`, `MAIL_MAILER=log`, **sem** `SANCTUM_STATEFUL_DOMAINS`).
-  5. Criar alerta de orçamento mensal via `az consumption budget create` para proteger os créditos **Azure for Students**.
+  4. Provisionar **Azure Database for PostgreSQL Flexible Server** (`Standard_B1ms`, `Burstable`, PostgreSQL `16`, banco `assinart`, firewall `--public-access 0.0.0.0`, `DB_SSLMODE=require`) quando `DB_CONNECTION=pgsql` (padrão; opcional `DB_CONNECTION=sqlite` para fallback).
+  5. Configurar App Settings conforme `azure/appsettings.example.env` (`WEBSITES_CONTAINER_START_TIME_LIMIT=230`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`, `LOG_CHANNEL=stderr`, `LOG_LEVEL=warning`, `MAIL_FROM_ADDRESS=contato@assin.art`, `MAIL_REPLY_TO_ADDRESS=sac@assin.art`, e credenciais SMTP quando fornecidas via ambiente, **sem** `SANCTUM_STATEFUL_DOMAINS`).
+  6. Criar alerta de orçamento mensal via `az consumption budget create` para proteger os créditos **Azure for Students**.
 
 ---
 

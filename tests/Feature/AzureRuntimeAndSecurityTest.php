@@ -52,6 +52,8 @@ class AzureRuntimeAndSecurityTest extends TestCase
         $this->assertStringContainsString('--min-tls-version 1.2', $provision);
         $this->assertStringContainsString('--ftps-state Disabled', $provision);
         $this->assertStringContainsString('WEBSITES_CONTAINER_START_TIME_LIMIT="230"', $provision);
+        $this->assertStringContainsString('az postgres flexible-server create', $provision);
+        $this->assertStringContainsString('DB_SSLMODE="require"', $provision);
         $this->assertStringContainsString('az consumption budget create', $provision);
 
         $backup = file_get_contents(base_path('azure/backup.sh'));
@@ -62,6 +64,8 @@ class AzureRuntimeAndSecurityTest extends TestCase
         $appSettings = file_get_contents(base_path('azure/appsettings.example.env'));
         $this->assertStringContainsString('APP_ENV=production', $appSettings);
         $this->assertStringContainsString('APP_DEBUG=false', $appSettings);
+        $this->assertStringContainsString('DB_CONNECTION=pgsql', $appSettings);
+        $this->assertStringContainsString('DB_SSLMODE=require', $appSettings);
         $this->assertStringContainsString('FILESYSTEM_DISK=public', $appSettings);
         $this->assertStringContainsString('MEDIA_DISK=public', $appSettings);
         $this->assertStringContainsString('SESSION_DRIVER=file', $appSettings);

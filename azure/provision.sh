@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Provisionamento Azure App Service (Linux / PHP 8.3) para Assin.art v1
+# Provisionamento Azure App Service (Linux / PHP 8.3) + PostgreSQL Flexible Server para Assin.art v1
 # Parâmetros configuráveis via variáveis de ambiente antes da execução.
 RG="${RG:-rg-assinart-prod}"
 LOCATION="${LOCATION:-brazilsouth}"
@@ -9,8 +9,23 @@ FALLBACK_LOCATION="${FALLBACK_LOCATION:-eastus2}"
 PLAN="${PLAN:-plan-assinart-prod}"
 APP_NAME="${APP_NAME:-assinart-api}"
 SKU="${SKU:-B1}"
+DB_CONNECTION="${DB_CONNECTION:-pgsql}"
+PG_SERVER_NAME="${PG_SERVER_NAME:-${APP_NAME}-pg}"
+PG_DATABASE="${PG_DATABASE:-assinart}"
+PG_ADMIN_USER="${PG_ADMIN_USER:-assinart_admin}"
+PG_ADMIN_PASSWORD="${PG_ADMIN_PASSWORD:-}"
+PG_SKU="${PG_SKU:-Standard_B1ms}"
+PG_TIER="${PG_TIER:-Burstable}"
+PG_STORAGE_SIZE="${PG_STORAGE_SIZE:-32}"
+PG_VERSION="${PG_VERSION:-16}"
+MAIL_MAILER="${MAIL_MAILER:-log}"
+MAIL_HOST="${MAIL_HOST:-smtp.resend.com}"
+MAIL_PORT="${MAIL_PORT:-587}"
+MAIL_USERNAME="${MAIL_USERNAME:-resend}"
+MAIL_PASSWORD="${MAIL_PASSWORD:-}"
+MAIL_ENCRYPTION="${MAIL_ENCRYPTION:-tls}"
 BUDGET_NAME="${BUDGET_NAME:-budget-assinart-prod}"
-BUDGET_AMOUNT="${BUDGET_AMOUNT:-15}"
+BUDGET_AMOUNT="${BUDGET_AMOUNT:-30}"
 BUDGET_EMAIL="${BUDGET_EMAIL:-}"
 APP_KEY_VALUE="${APP_KEY:-base64:$(openssl rand -base64 32)}"
 
@@ -76,7 +91,81 @@ az webapp config set \
   --startup-file "/home/site/wwwroot/azure/startup.sh" \
   --output table
 
-echo "7. Configurando App Settings de produção (sem SANCTUM_STATEFUL_DOMAINS)..."
+if [ "${DB_CONNECTION}" = "pgsql" ]; then
+  echo "6.5. Provisionando Azure Database for PostgreSQL Flexible Server (${PG_SERVER_NAME}, ${PG_SKU})..."
+  if az postgres flexible-server show --resource-group "${RG}" --name "${PG_SERVER_NAME}" >/dev/null 2>&1; then
+    echo "PostgreSQL Flexible Server ${PG_SERVER_NAME} já existe em ${RG}."
+    if [ -z "${PG_ADMIN_PASSWORD}" ]; then
+      PG_ADMIN_PASSWORD="$(az webapp config appsettings list --resource-group "${RG}" --name "${APP_NAME}" --query "[?name=='DB_PASSWORD'].value | [0]" -o tsv 2>/dev/null || true)"
+    fi
+    if [ -z "${PG_ADMIN_PASSWORD}" ]; then
+      echo "Erro: ${PG_SERVER_NAME} já existe. Informe PG_ADMIN_PASSWORD para atualizar as App Settings." >&2
+      exit 1
+    fi
+  else
+    if [ -z "${PG_ADMIN_PASSWORD}" ]; then
+      PG_ADMIN_PASSWORD="Pg!$(openssl rand -hex 12)Az9"
+    fi
+    az postgres flexible-server create \
+      --resource-group "${RG}" \
+      --name "${PG_SERVER_NAME}" \
+      --location "${LOCATION}" \
+      --admin-user "${PG_ADMIN_USER}" \
+      --admin-password "${PG_ADMIN_PASSWORD}" \
+      --sku-name "${PG_SKU}" \
+      --tier "${PG_TIER}" \
+      --version "${PG_VERSION}" \
+      --storage-size "${PG_STORAGE_SIZE}" \
+      --public-access 0.0.0.0 \
+      --yes \
+      --output table
+  fi
+
+  az postgres flexible-server db create \
+    --resource-group "${RG}" \
+    --server-name "${PG_SERVER_NAME}" \
+    --database-name "${PG_DATABASE}" \
+    --output table || true
+fi
+
+echo "7. Configurando App Settings de produção (${DB_CONNECTION}, sem SANCTUM_STATEFUL_DOMAINS)..."
+DB_SETTINGS=()
+if [ "${DB_CONNECTION}" = "pgsql" ]; then
+  DB_SETTINGS=(
+    DB_CONNECTION="pgsql"
+    DB_HOST="${PG_SERVER_NAME}.postgres.database.azure.com"
+    DB_PORT="5432"
+    DB_DATABASE="${PG_DATABASE}"
+    DB_USERNAME="${PG_ADMIN_USER}"
+    DB_PASSWORD="${PG_ADMIN_PASSWORD}"
+    DB_SSLMODE="require"
+  )
+else
+  DB_SETTINGS=(
+    DB_CONNECTION="sqlite"
+    DB_DATABASE="/home/data/database.sqlite"
+    DB_SQLITE_BUSY_TIMEOUT="5000"
+    DB_SQLITE_JOURNAL_MODE="WAL"
+  )
+fi
+
+MAIL_SETTINGS=(
+  MAIL_MAILER="${MAIL_MAILER}"
+  MAIL_FROM_ADDRESS="contato@assin.art"
+  MAIL_FROM_NAME="Assinart"
+  MAIL_REPLY_TO_ADDRESS="sac@assin.art"
+  MAIL_REPLY_TO_NAME="Assinart"
+)
+if [ "${MAIL_MAILER}" = "smtp" ] && [ -n "${MAIL_PASSWORD}" ]; then
+  MAIL_SETTINGS+=(
+    MAIL_HOST="${MAIL_HOST}"
+    MAIL_PORT="${MAIL_PORT}"
+    MAIL_USERNAME="${MAIL_USERNAME}"
+    MAIL_PASSWORD="${MAIL_PASSWORD}"
+    MAIL_ENCRYPTION="${MAIL_ENCRYPTION}"
+  )
+fi
+
 az webapp config appsettings set \
   --resource-group "${RG}" \
   --name "${APP_NAME}" \
@@ -90,10 +179,7 @@ az webapp config appsettings set \
     APP_URL="https://${APP_NAME}.azurewebsites.net" \
     FRONTEND_URL="https://assin.art" \
     CORS_ALLOWED_ORIGINS="https://assin.art,https://www.assin.art" \
-    DB_CONNECTION="sqlite" \
-    DB_DATABASE="/home/data/database.sqlite" \
-    DB_SQLITE_BUSY_TIMEOUT="5000" \
-    DB_SQLITE_JOURNAL_MODE="WAL" \
+    "${DB_SETTINGS[@]}" \
     FILESYSTEM_DISK="public" \
     MEDIA_DISK="public" \
     SESSION_DRIVER="file" \
@@ -101,10 +187,10 @@ az webapp config appsettings set \
     QUEUE_CONNECTION="sync" \
     LOG_CHANNEL="stderr" \
     LOG_LEVEL="warning" \
-    MAIL_MAILER="log" \
+    "${MAIL_SETTINGS[@]}" \
     WEBSITES_ENABLE_APP_SERVICE_STORAGE="true" \
     WEBSITES_CONTAINER_START_TIME_LIMIT="230" \
-  --output table
+  --output none
 
 echo "8. Habilitando logs de aplicação e servidor web em filesystem..."
 az webapp log config \
