@@ -33,7 +33,9 @@ Contudo, **as falhas críticas anteriores permanecem abertas** e **novas superf�
 | **SEC-09** | Média | `config/cors.php`, `bootstrap/app.php` | **Mantida** | CORS amplo (`paths` com `'*'` e `supports_credentials: true`) e ausência de Security Headers HTTP |
 | **SEC-10** | Média | `bootstrap/app.php` (`finfo` stub) e `/storage` | **Mantida** | Stub silencioso de `finfo` retornando `false` e necessidade de bloquear PHP em `/storage` |
 | **SEC-11** | Baixa | `UpdateProfileRequest`, `OnboardingButtonsRequest`, `Store/UpdateButtonRequest`, `RedirectController` | **Atualizada** | Cores/estilos sem regex estrito, `X-Visitor-Id` sem truncamento (64 chars) e falta de `throttle` em uploads |
-| **SEC-12** | Baixa | `Button.php`, `OnboardingController::saveLinks`, `PublicProfileController`, `ManagesPasswordAndEmail` | **Mantida** | `$fillable` com `artist_id`/`clicks_count`, órfãos em `saveLinks`, e-mail simulado e divergência de `RESERVED_ROUTES` |
+| **SEC-12** | Baixa | `Button.php`, `OnboardingController::saveLinks`, `ManagesPasswordAndEmail` | **Parcialmente corrigida** | `$fillable` com `artist_id`/`clicks_count`, órfãos em `saveLinks` e e-mail simulado. A divergência de slugs reservados foi corrigida por `App\Support\ReservedUsernames` |
+| **SEC-13** | Média | `database/database.sqlite`, `bootstrap/cache/*.php`, `composer.phar`, `storage/logs/laravel.log`, `.env.example` | **Nova** | Artefatos sensíveis e gerados versionados no Git. `APP_DEBUG=true` no exemplo |
+| **SEC-14** | Alta (governança) | Backlog (`#287`, `#288`, `#289`) | **Nova** | SEC-01 a SEC-03 constam como `DONE` no backlog, mas o código do backend ainda contém as falhas |
 | **SEC-OLD-06** | — | `PUT\|PATCH /api/v1/profile` (validação de `username`) | **Corrigida** | Resolvida por `UpdateProfileRequest` + `App\Rules\ArtistUsername` |
 
 ---
@@ -179,7 +181,40 @@ Contudo, **as falhas críticas anteriores permanecem abertas** e **novas superf�
 
 ---
 
+## 4.1 Reverificação no Código (2026-11-15, branch `develop`, `ce73836`)
+
+| ID | Evidência atual | Resultado |
+|---|---|---|
+| SEC-01 | `routes/api_auth.php` mantém `Route::match(['get','post'], '/email/verify')` público. `OnboardingController.php` L292-293 grava `email_verified_at`. | **Aberta** |
+| SEC-02 | `InteractsWithMediaStorage::deleteFileFromStorage` apaga sem checar dono. | **Aberta** |
+| SEC-03 | `formatPlatformUrl` retorna `$input` em `whatsapp` (L352). Requests de botão usam só `url`. | **Aberta** |
+| SEC-04 | `MetricsController::track` sem `FormRequest`, sem `throttle`, sem filtro `is_published`/`is_active`. | **Aberta** |
+| SEC-05 | Sem `throttle` em `register`, `forgot-password` e `reset-password`. `ManagesPasswordAndEmail` L95 mantém `hash_equals` em texto puro. | **Aberta** |
+| SEC-06 | `bootstrap/app.php` recebeu `trustProxies(at: '*')` em `API-12` (`5635c9c`); chave composta de `login` e `email/resend` segue pendente. | **Parcial** |
+| SEC-07 | `RedirectController` sem `is_published`. `PublicProfileController` L41 e L63 expõem `id`. | **Aberta** |
+| SEC-08 | `config/sanctum.php` L50 `expiration` `null`. `RegisterRequest.php` L67 `min:6`. | **Aberta** |
+| SEC-09 | `config/cors.php` mantém `'*'` e `supports_credentials` `true`. Existe `tests/Feature/CorsSecurityTest.php`: revise a cobertura. | **Aberta** |
+| SEC-10 | `finfo` falso mantido em `bootstrap/app.php`. | **Aberta** |
+| SEC-12 | `ReservedUsernames` unifica os slugs reservados. | **Slugs corrigidos** |
+
+> [!WARNING]
+> Os cards `#287`, `#288` e `#289` estão em `DONE`. Confirme se as correções vivem em outro repositório ou branch (`SEC-14`).
+
+### SEC-13 — Artefatos Sensíveis e Gerados no Git (Média — Nova)
+- **Onde:** `git ls-files` lista `database/database.sqlite`, `bootstrap/cache/packages.php`, `bootstrap/cache/services.php`, `composer.phar`, `storage/logs/laravel.log` e `storage/framework/views/*.php`. `.env.example` define `APP_DEBUG=true`.
+- **Análise:** O banco versionado pode conter e-mails e hashes de teste. O log pode vazar dados de requisições. O cache de pacotes referencia `require-dev` e quebra `composer install --no-dev`.
+- **Remediação:** `git rm --cached` nos arquivos, reforço do `.gitignore`, `APP_DEBUG=false` no exemplo e inspeção do histórico.
+
+### Riscos Específicos do Deploy no Azure (ver `DEPLOY_PLAN.md`)
+- **SQLite em `/home` (CIFS):** escrita pública sem limite em `/track` e `/r/{id}` agrava locks. Corrija **SEC-04** antes do deploy.
+- **Nginx:** o startup deve negar `.php` em `/storage` e ocultar arquivos `.`
+- **`.env` no pacote:** exclua `.env*` do ZIP. O `.env` local sobrepõe os App Settings.
+- **`MAIL_MAILER=log`:** `forgot-password` não envia e-mail. O token cai no log (`LOG_CHANNEL=stderr`), o que expõe tokens de reset nos logs do Azure. Use `LOG_LEVEL=warning` e SMTP real no pós-MVP.
+
+---
+
 ## 5. Prioridade de Correção Pré-Deploy
 
+0. **Bloqueio de governança:** **SEC-14** (reverificar SEC-01 a SEC-03 antes de qualquer deploy).
 1. **Imediato (Crítico/Alto):** **SEC-01** (email verify + onboarding), **SEC-02** (IDOR de deleção no storage em buttons + profile + account), **SEC-04** (validação, filtro `is_published`/`is_active` e throttle em `POST /api/v1/track`), **SEC-03** (`whatsapp` + whitelist `http(s)` + `wallpaper_url` + SVG base64), **SEC-05** & **SEC-06** (`trustProxies` + `throttle` em auth + revogação de tokens no reset).
-2. **Endurecimento:** **SEC-07** a **SEC-12** (draft check em `/r/{id}`, expiração Sanctum, security headers, bloqueio PHP em `/storage/`, validação hex em cores e throttle em uploads).
+2. **Endurecimento:** **SEC-07** a **SEC-13** (draft check em `/r/{id}`, expiração Sanctum, security headers, bloqueio PHP em `/storage/`, validação hex em cores e throttle em uploads).

@@ -1,10 +1,10 @@
 # Plano de Deploy — Assin.art v1 (Backend Laravel + Frontend React)
 
 > **Objetivo:** Publicar a API Laravel (`assinart_v1-back`) no **Azure App Service (Linux / PHP 8.3)** usando a assinatura **Azure for Students** e conectá-la ao frontend React/Vite (`assinart_v1`) hospedado no **GitHub Pages** (`https://assin.art`).
-> **Status:** Planejamento atualizado após merge de `origin/develop` em `main` (nenhum deploy executado).
+> **Status:** Planejamento revisado em 2026-11-15 (furos incorporados na seção 7). Nenhum deploy executado. **Deploy bloqueado** até concluir os itens P0 da seção 7.
 > **Repositórios envolvidos:**
-> - Backend: `/data/data/com.termux/files/home/assinart_v1-back` (`https://github.com/pinhogo/assinart_v1-back`, branch `main` @ `e2fc47d`)
-> - Frontend: `/data/data/com.termux/files/home/assinart_v1` (`https://github.com/pinhogo/assinart_v1`, branch `main`)
+> - Backend: `/home/pinho/Projetos/assinart_v1_backend` (`https://github.com/pinhogo/assinart_v1-back`, branch `main` @ `e2fc47d`)
+> - Frontend: `/home/pinho/Projetos/assinart_v1` (`https://github.com/pinhogo/assinart_v1`, branch `main`)
 
 ---
 
@@ -172,10 +172,10 @@ flowchart LR
 
    cp /home/site/wwwroot/azure/nginx.conf /etc/nginx/sites-available/default
    nginx -t
-   service nginx reload
+   nginx -s reload || service nginx reload  # P1-1: valide no App Service real
    ```
 
-6. **Aplicar correções de segurança pré-produção (ver [SECURITY_AUDIT.md](file:///data/data/com.termux/files/home/assinart_v1-back/SECURITY_AUDIT.md)) e validar suíte local:**
+6. **Aplicar correções de segurança pré-produção (bloqueante: `SEC-14` e `SEC-04`..`SEC-13`; ver seção 7) (ver [SECURITY_AUDIT.md](file:///home/pinho/Projetos/assinart_v1_backend/context/SECURITY_AUDIT.md)) e validar suíte local:**
    - Executar `php artisan test` (incluindo os novos testes de métricas, publicação/draft, normalização de username, account deletion e background media) garantindo exit code `0`.
 
 ---
@@ -268,8 +268,8 @@ az webapp config appsettings set \
    cd /tmp/assinart-build
 
    rm -f bootstrap/cache/*.php database/database.sqlite composer.phar \
-         DEPLOY_PLAN.md deploy-prompt.json SECURITY_AUDIT.md README-local.md
-   rm -rf tests storage/logs/*.log
+         deploy-prompt.json README-local.md run.sh
+   rm -rf tests context docs documentacao .agents storage/logs/*.log storage/framework/views/*.php
 
    composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
    chmod +x azure/startup.sh
@@ -332,3 +332,59 @@ Executar em **aba anônima**:
 
 1. **Frontend:** Alterar `VITE_USE_MOCK_API` para `true` nas GitHub Variables e reexecutar `deploy-pages.yml` para restaurar o modo demo imediatamente.
 2. **Backend:** Manter backup de `/home/data/database.sqlite` antes de deploys com novas migrations; em caso de falha, reimplantar o ZIP anterior estável via `az webapp deploy --type zip` e reiniciar o Web App.
+
+
+---
+
+## 7. Furos Identificados na Revisão (2026-11-15)
+
+> Rastreio: cards `BACKLOG - FLUXO B` no GitHub Project nº 2, blocos em [`BACKLOG_MELHORIAS.md`](BACKLOG_MELHORIAS.md) e Fase 9 em [`tasks_backend.md`](tasks_backend.md). Auditoria em [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md).
+
+### P0 — Bloqueiam o deploy
+
+| # | Furo | Ação | ID |
+| :--- | :--- | :--- | :--- |
+| P0-1 | O backlog marca `SEC-01`..`SEC-03` como `DONE`, mas o código ainda tem as falhas (verify de e-mail público, IDOR no storage, URL sem whitelist). | Reverifique e reabra. | `SEC-14` |
+| P0-2 | `POST /api/v1/track` sem validação, throttle ou filtro de `draft`. Piora o SQLite em `/home`. | Valide e limite. | `SEC-04` |
+| P0-3 | `trustProxies(at: '*')` já foi adicionado em `API-12` (`5635c9c`); chave composta de `login` e `email/resend` segue pendente. | Validar IP real e ajustar chaves. | `SEC-06`, `API-14` |
+| P0-4 | Sem throttle em `register`, `forgot-password` e `reset-password`. O reset aceita token em texto puro. | Aplique throttle e remova o fallback. | `SEC-05` |
+| P0-5 | O Git rastreia `database.sqlite`, `bootstrap/cache`, `composer.phar` e `laravel.log`. `.env.example` tem `APP_DEBUG=true`. | Limpe o índice. | `SEC-13` |
+| P0-6 | A pasta `azure/` não existe no repositório. O `git archive HEAD` descarta qualquer arquivo não commitado. | Crie e commite `azure/`. | `API-15` |
+
+### P1 — Risco alto de falha em produção
+
+| # | Furo | Ação | ID |
+| :--- | :--- | :--- | :--- |
+| P1-1 | `service nginx reload` pode falhar no startup (Nginx ainda parado). O config padrão é recriado a cada boot. | Teste `nginx -s reload` no App Service real. | `API-15` |
+| P1-2 | `PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d` assume a imagem Docker oficial. | Use `public/.user.ini` ou confirme o caminho. | `API-15` |
+| P1-3 | SQLite em `/home` (CIFS): risco de `database is locked` e corrupção. Não existe backup. | Faça teste de carga, WAL e backup. | `API-18` |
+| P1-4 | `migrate --force` roda em todo boot. A data migration de usernames pode derrubar o app. | Faça backup antes e fixe instância única. | `API-15`, `API-17` |
+| P1-5 | `config:cache`, `route:cache` e `view:cache` no startup atrasam o boot (limite de 230 s). | Gere os caches no build. | `API-15`, `API-16` |
+| P1-6 | Os testes locais rodam no PHP do Termux com `finfo` falso: o MIME de upload não é validado. | Rode `php artisan test` em PHP 8.3 real (CI). | `SEC-10`, `API-16` |
+| P1-7 | Quota de B1 e restrição de região em Azure for Students não verificadas. | Valide antes de provisionar. | `API-17` |
+| P1-8 | `.env` local sobrepõe os App Settings se entrar no ZIP. | Exclua `.env*` do ZIP e valide. | `API-16` |
+
+### P2 — Endurecimento e operação
+
+| # | Furo | Ação | ID |
+| :--- | :--- | :--- | :--- |
+| P2-1 | `supports_credentials=true` e `'*'` em `paths` de CORS. O auth usa Bearer. | Restrinja o CORS. | `SEC-09` |
+| P2-2 | `SANCTUM_STATEFUL_DOMAINS` é inútil: `statefulApi()` está desativado. | Remova do App Settings. | `SEC-09` |
+| P2-3 | Tokens Sanctum sem expiração. Senha `min:6`. | Defina expiração e `min:8`. | `SEC-08` |
+| P2-4 | `/r/{id}` redireciona perfis `draft`. `forgot-password` permite enumerar contas. | Corrija os dois casos. | `SEC-07` |
+| P2-5 | `MAIL_MAILER=log` com `LOG_CHANNEL=stderr` grava tokens de reset nos logs do Azure. | Use `LOG_LEVEL=warning` e SMTP real no pós-MVP. | `API-19` |
+| P2-6 | DNS de `assin.art` e `www.assin.art` e HTTPS forçado no GitHub Pages não constam no plano. | Valide na Fase 5. | `API-19` |
+| P2-7 | O rollback não restaura o schema nem o banco. | Restaure o ZIP anterior e o backup. | `API-19` |
+| P2-8 | `GET /{username}` pode colidir com `/storage/*`. | Teste com `ReservedUsernames`. | `API-14` |
+| P2-9 | Cache e sessão em `file` sobre CIFS deixam o `RateLimiter` lento. | Meça no teste de carga. | `API-18` |
+| P2-10 | Crédito Azure for Students sem alerta de custo. | Crie alerta de orçamento. | `API-17` |
+
+### Ordem de execução
+
+1. `SEC-14` ➔ `SEC-13` ➔ `SEC-04`, `SEC-05`, `SEC-06` (P0).
+2. `API-15` ➔ `API-16` ➔ `API-17` (P1).
+3. `API-18` ➔ `API-19` (teste de carga, E2E e rollback).
+4. `SEC-07`..`SEC-12` e `API-14` antes do uso público, ou como pós-MVP imediato.
+5. `API-20`..`API-22`, `CAD-11` e `FIX-GLB-22` para envio real de confirmação de e-mail, guarda de `/editor`, redirecionamento pós-login e encaminhamento de `sac@assin.art` ao Gmail pessoal.
+
+> **Nota pós-merge (`API-12` / `API-13` em `develop`):** `5635c9c` e `b8c092f` já incluíram `trustProxies(at: '*')`, `config/database.php`, migration `jobs`, healthcheck com DB em `/up` e disco `azure` (`MEDIA_DISK`). Quando configurar `DB_CONNECTION` gerenciado e `MEDIA_DISK=azure` no App Service, `API-18` (risco de SQLite em `/home`) torna-se dispensável.
