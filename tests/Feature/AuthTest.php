@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Artist;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -16,6 +18,8 @@ class AuthTest extends TestCase
     protected function tearDown(): void
     {
         RateLimiter::clear('login|127.0.0.1');
+        RateLimiter::clear('login|brute@assin.art|127.0.0.1');
+        Cache::flush();
         parent::tearDown();
     }
 
@@ -152,7 +156,7 @@ class AuthTest extends TestCase
     }
 
     /**
-     * Tier 2: Senha com menos de 6 caracteres é rejeitada (422 Unprocessable).
+     * Tier 2: Senha com menos de 8 caracteres é rejeitada (422 Unprocessable).
      */
     public function test_register_short_password_fails(): void
     {
@@ -160,7 +164,7 @@ class AuthTest extends TestCase
             'name' => 'Senha Curta',
             'username' => 'senha_curta',
             'email' => 'curta@assin.art',
-            'password' => '123',
+            'password' => '1234567',
             'agree_terms' => true,
         ]);
 
@@ -242,8 +246,8 @@ class AuthTest extends TestCase
      */
     public function test_login_rate_limiting_triggers_429(): void
     {
-        $throttleKey = 'login|127.0.0.1';
-        RateLimiter::clear($throttleKey);
+        RateLimiter::clear('login|brute@assin.art|127.0.0.1');
+        RateLimiter::clear('login|127.0.0.1');
 
         for ($i = 0; $i < 5; $i++) {
             $this->postJson('/api/v1/auth/login', [
@@ -343,7 +347,7 @@ class AuthTest extends TestCase
         $forgotResponse->assertStatus(200)
             ->assertJson([
                 'status' => 'success',
-                'message' => 'Link de recuperação enviado com sucesso.',
+                'message' => 'Se o e-mail estiver cadastrado, enviaremos um link de recuperação.',
             ]);
 
         $record = DB::table('password_reset_tokens')->where('email', 'recupera@assin.art')->first();
@@ -381,7 +385,7 @@ class AuthTest extends TestCase
     public function test_email_resend_cooldown_returns_429(): void
     {
         $email = 'cooldown@assin.art';
-        $throttleKey = 'resend-email-verification|' . $email;
+        $throttleKey = 'resend-email-verification|127.0.0.1|' . $email;
         RateLimiter::clear($throttleKey);
 
         $firstResponse = $this->postJson('/api/v1/auth/email/resend', [
@@ -399,7 +403,7 @@ class AuthTest extends TestCase
     }
 
     /**
-     * Tier 1: Confirmação de e-mail marca email_verified_at.
+     * Tier 1 (SEC-14.2): Confirmação de e-mail via URL assinada válida marca email_verified_at.
      */
     public function test_email_verification_marks_verified(): void
     {
@@ -408,8 +412,16 @@ class AuthTest extends TestCase
             'email_verified_at' => null,
         ]);
 
-        $response = $this->actingAs($artist, 'sanctum')
-            ->postJson('/api/v1/auth/email/verify');
+        $signedUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            [
+                'id' => $artist->id,
+                'hash' => sha1($artist->email),
+            ]
+        );
+
+        $response = $this->getJson($signedUrl);
 
         $response->assertStatus(200)
             ->assertJson([
@@ -418,5 +430,298 @@ class AuthTest extends TestCase
 
         $artist->refresh();
         $this->assertNotNull($artist->email_verified_at);
+    }
+
+    /**
+     * SEC-14.2: Requisição de verificação sem assinatura válida retorna 403 sem verificar o e-mail.
+     */
+    public function test_email_verification_without_valid_signature_returns_403(): void
+    {
+        $artist = Artist::factory()->create([
+            'email' => 'tampered@assin.art',
+            'email_verified_at' => null,
+        ]);
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/auth/email/verify', [
+                'email' => $artist->email,
+            ]);
+
+        $response->assertStatus(403)
+            ->assertJson([
+                'status' => 'error',
+                'message' => 'Link de verificação inválido ou expirado.',
+            ]);
+
+        $artist->refresh();
+        $this->assertNull($artist->email_verified_at);
+    }
+
+    /**
+     * SEC-05.1: Endpoint de registro aplica throttle 10 req/min (429 na 11ª tentativa).
+     */
+    public function test_register_rate_limiting_triggers_429(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            $this->postJson('/api/v1/auth/register', [
+                'name' => 'Invalid User',
+            ]);
+        }
+
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Invalid User',
+        ]);
+
+        $response->assertStatus(429);
+    }
+
+    /**
+     * SEC-05.2: Endpoint forgot-password aplica throttle 5 req/min.
+     */
+    public function test_forgot_password_rate_limiting_triggers_429(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/forgot-password', [
+                'email' => 'rate@assin.art',
+            ]);
+        }
+
+        $response = $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => 'rate@assin.art',
+        ]);
+
+        $response->assertStatus(429);
+    }
+
+    /**
+     * SEC-05.2: Endpoint reset-password aplica throttle 5 req/min.
+     */
+    public function test_reset_password_rate_limiting_triggers_429(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/reset-password', [
+                'email' => 'rate@assin.art',
+            ]);
+        }
+
+        $response = $this->postJson('/api/v1/auth/reset-password', [
+            'email' => 'rate@assin.art',
+        ]);
+
+        $response->assertStatus(429);
+    }
+
+    /**
+     * SEC-05.3: Reset de senha rejeita token armazenado em texto puro no banco.
+     */
+    public function test_reset_password_rejects_plaintext_token_in_database(): void
+    {
+        $artist = Artist::factory()->create([
+            'email' => 'plaintext@assin.art',
+            'password' => Hash::make('senha_antiga_123'),
+        ]);
+
+        $rawToken = 'token_em_texto_puro_nao_hash';
+        DB::table('password_reset_tokens')->insert([
+            'email' => $artist->email,
+            'token' => $rawToken,
+            'created_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/reset-password', [
+            'token' => $rawToken,
+            'email' => $artist->email,
+            'password' => 'nova_senha_segura',
+            'password_confirmation' => 'nova_senha_segura',
+        ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'status' => 'error',
+            ]);
+
+        $artist->refresh();
+        $this->assertTrue(Hash::check('senha_antiga_123', $artist->password));
+    }
+
+    /**
+     * SEC-05.4: Redefinir senha revoga todos os tokens Sanctum ativos do artista.
+     */
+    public function test_reset_password_revokes_all_sanctum_tokens(): void
+    {
+        $artist = Artist::factory()->create([
+            'email' => 'revoga_tokens@assin.art',
+            'password' => Hash::make('antiga_1234'),
+        ]);
+
+        $tokenOne = $artist->createToken('device_1')->plainTextToken;
+        $tokenTwo = $artist->createToken('device_2')->plainTextToken;
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+
+        $rawToken = 'token_reset_valido_123';
+        DB::table('password_reset_tokens')->insert([
+            'email' => $artist->email,
+            'token' => Hash::make($rawToken),
+            'created_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/reset-password', [
+            'token' => $rawToken,
+            'email' => $artist->email,
+            'password' => 'nova_senha_1234',
+            'password_confirmation' => 'nova_senha_1234',
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $tokenOne)
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(401);
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $tokenTwo)
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(401);
+    }
+
+    /**
+     * SEC-06.2: Bloqueio de login em 429 para um e-mail não bloqueia outro e-mail no mesmo IP.
+     */
+    public function test_login_rate_limiting_isolates_different_emails_on_same_ip(): void
+    {
+        Artist::factory()->create([
+            'email' => 'alvo1@assin.art',
+            'password' => Hash::make('correta_1234'),
+        ]);
+        Artist::factory()->create([
+            'email' => 'alvo2@assin.art',
+            'password' => Hash::make('correta_1234'),
+        ]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/v1/auth/login', [
+                'email' => 'alvo1@assin.art',
+                'password' => 'errada',
+            ])->assertStatus(401);
+        }
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'alvo1@assin.art',
+            'password' => 'correta_1234',
+        ])->assertStatus(429);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'alvo2@assin.art',
+            'password' => 'correta_1234',
+        ])->assertStatus(200);
+    }
+
+    /**
+     * SEC-06.3: Cooldown de reenvio de verificação é isolado por IP + e-mail normalizado.
+     */
+    public function test_email_resend_cooldown_is_scoped_by_ip_and_email(): void
+    {
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.1'])
+            ->postJson('/api/v1/auth/email/resend', ['email' => 'vitima@assin.art'])
+            ->assertStatus(200);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.1'])
+            ->postJson('/api/v1/auth/email/resend', ['email' => 'VITIMA@assin.art'])
+            ->assertStatus(429);
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->postJson('/api/v1/auth/email/resend', ['email' => 'vitima@assin.art'])
+            ->assertStatus(200);
+    }
+
+    /**
+     * SEC-07.1: forgot-password retorna 200 genérico para e-mail inexistente sem gravar token.
+     */
+    public function test_forgot_password_returns_generic_200_for_nonexistent_email_without_creating_token(): void
+    {
+        $response = $this->postJson('/api/v1/auth/forgot-password', [
+            'email' => 'inexistente@assin.art',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'success',
+                'message' => 'Se o e-mail estiver cadastrado, enviaremos um link de recuperação.',
+            ]);
+
+        $this->assertDatabaseMissing('password_reset_tokens', [
+            'email' => 'inexistente@assin.art',
+        ]);
+    }
+
+    /**
+     * SEC-07.2: Endpoint /api/v1/usernames/check aplica throttle 60 req/min.
+     */
+    public function test_usernames_check_rate_limiting_triggers_429(): void
+    {
+        for ($i = 0; $i < 60; $i++) {
+            $this->getJson('/api/v1/usernames/check?username=livre_teste')
+                ->assertStatus(200);
+        }
+
+        $this->getJson('/api/v1/usernames/check?username=livre_teste')
+            ->assertStatus(429);
+    }
+
+    /**
+     * SEC-08.2: RegisterRequest e resetPassword rejeitam senhas com menos de 8 caracteres.
+     */
+    public function test_register_and_reset_password_reject_passwords_shorter_than_8_characters(): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Artista Curto',
+            'username' => 'artista_curto',
+            'email' => 'curto8@assin.art',
+            'password' => '1234567',
+            'agree_terms' => true,
+        ])->assertStatus(422)->assertJsonValidationErrors(['password']);
+
+        $artist = Artist::factory()->create(['email' => 'reset8@assin.art']);
+
+        $this->postJson('/api/v1/auth/reset-password', [
+            'token' => 'qualquer_token',
+            'email' => $artist->email,
+            'password' => '1234567',
+            'password_confirmation' => '1234567',
+        ])->assertStatus(422)->assertJsonValidationErrors(['password']);
+    }
+
+    /**
+     * SEC-08.3: Logout com flag all=true revoga todos os tokens ativos do artista.
+     */
+    public function test_logout_with_all_flag_revokes_all_tokens(): void
+    {
+        $artist = Artist::factory()->create();
+        $tokenOne = $artist->createToken('device_1')->plainTextToken;
+        $tokenTwo = $artist->createToken('device_2')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer ' . $tokenOne)
+            ->postJson('/api/v1/auth/logout', ['all' => true])
+            ->assertStatus(200);
+
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $tokenTwo)
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(401);
+    }
+
+    /**
+     * SEC-08.1: Configuração sanctum.expiration possui tempo de expiração definido.
+     */
+    public function test_sanctum_expiration_is_configured(): void
+    {
+        $expiration = config('sanctum.expiration');
+
+        $this->assertNotNull($expiration);
+        $this->assertGreaterThan(0, (int) $expiration);
     }
 }

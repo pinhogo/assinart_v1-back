@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Models\Artist;
+use App\Services\EmailVerificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ class AuthController extends Controller
 {
     use ManagesPasswordAndEmail, InteractsWithMediaStorage;
 
-    public function register(RegisterRequest $request): JsonResponse
+    public function register(RegisterRequest $request, EmailVerificationService $verificationService): JsonResponse
     {
         $cleanUsername = ltrim(strtolower(trim($request->input('username'))), '@');
 
@@ -40,17 +41,20 @@ class AuthController extends Controller
         ]);
 
         $artist = $artist->fresh() ?? $artist;
+        $verificationService->sendVerificationEmail($artist);
 
         return $this->respondWithArtistSession($artist, 'Conta criada com sucesso.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
+        $emailKey = strtolower(trim((string) $request->input('email', '')));
         $ip = $request->ip() ?? '127.0.0.1';
-        $throttleKey = 'login|' . $ip;
+        $emailIpKey = 'login|' . $emailKey . '|' . $ip;
+        $ipOnlyKey = 'login|' . $ip;
 
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
+        if (RateLimiter::tooManyAttempts($emailIpKey, 5) || RateLimiter::tooManyAttempts($ipOnlyKey, 20)) {
+            $seconds = max(RateLimiter::availableIn($emailIpKey), RateLimiter::availableIn($ipOnlyKey));
             return response()->json([
                 'status' => 'error',
                 'message' => "Muitas tentativas de login. Tente novamente em {$seconds} segundos.",
@@ -58,17 +62,18 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $artist = Artist::where('email', strtolower(trim($request->input('email'))))->first();
+        $artist = Artist::where('email', $emailKey)->first();
 
         if (!$artist || !Hash::check($request->input('password'), $artist->password)) {
-            RateLimiter::hit($throttleKey, 60);
+            RateLimiter::hit($emailIpKey, 60);
+            RateLimiter::hit($ipOnlyKey, 60);
             return response()->json([
                 'status' => 'error',
                 'message' => 'Credenciais inválidas. Verifique seu e-mail e senha.',
             ], 401);
         }
 
-        RateLimiter::clear($throttleKey);
+        RateLimiter::clear($emailIpKey);
 
         return $this->respondWithArtistSession($artist, 'Login realizado com sucesso.', 200);
     }
@@ -83,7 +88,7 @@ class AuthController extends Controller
             'token' => $token,
             'artist' => $artist,
             'data' => [
-                'user' => $artist->only(['id', 'name', 'username', 'email', 'is_published', 'publication_status']),
+                'user' => $artist->only(['id', 'name', 'username', 'email', 'email_verified_at', 'is_published', 'publication_status']),
                 'token' => $token,
             ],
         ], $status);
@@ -92,8 +97,12 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
-            $user->currentAccessToken()->delete();
+        if ($user) {
+            if ($request->boolean('all') || $request->boolean('revoke_all')) {
+                $user->tokens()->delete();
+            } elseif (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+                $user->currentAccessToken()->delete();
+            }
         }
 
         return response()->json([
@@ -106,7 +115,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'status' => 'success',
-            'data' => $request->user(),
+            'data' => $request->user()?->fresh() ?? $request->user(),
         ], 200);
     }
 

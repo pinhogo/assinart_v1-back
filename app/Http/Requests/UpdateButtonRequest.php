@@ -2,11 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Controllers\Api\Concerns\InteractsWithMediaStorage;
+use App\Rules\HexColor;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateButtonRequest extends FormRequest
 {
+    use InteractsWithMediaStorage;
+
     public function authorize(): bool
     {
         return true;
@@ -22,14 +26,19 @@ class UpdateButtonRequest extends FormRequest
             'icon_variant' => ['nullable', 'string', 'in:default,black,white,none'],
             'show_icon_background' => ['nullable', 'boolean'],
             'type' => ['nullable', 'string', 'in:standard,featured,icon_pill,card_featured'],
-            'button_color' => ['nullable', 'string', 'max:20'],
-            'text_color' => ['nullable', 'string', 'max:20'],
+            'button_color' => ['nullable', 'string', 'max:20', new HexColor()],
+            'text_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'font_family' => ['nullable', 'string', 'max:50'],
             'font_weight' => ['nullable', 'string', 'in:normal,bold'],
             'font_style' => ['nullable', 'string', 'in:normal,italic'],
             'text_border' => ['nullable', 'string', 'in:none,black,white,yellow'],
             'text_align' => ['nullable', 'string', 'in:left,center,right'],
-            'image_url' => ['nullable', 'string', 'max:2048'],
+            'image_url' => [
+                'nullable',
+                'string',
+                'max:2048',
+                fn (string $a, mixed $v, Closure $f) => $this->validateStorageOwnership($a, $v, $this->user()?->id, $f),
+            ],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -67,7 +76,17 @@ class UpdateButtonRequest extends FormRequest
             ];
         }
 
-        return ['sometimes', 'required', 'url', 'max:2048'];
+        return [
+            'sometimes',
+            'required',
+            'url',
+            'max:2048',
+            function (string $attribute, mixed $value, Closure $fail): void {
+                if (!is_string($value) || preg_match('#^https?://#i', trim($value)) !== 1) {
+                    $fail('A URL de destino deve usar o protocolo http ou https.');
+                }
+            },
+        ];
     }
 
     private function resolveTargetPlatform(): ?string

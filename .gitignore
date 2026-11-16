@@ -18,6 +18,12 @@ yarn-error.log
 
 *.sqlite
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+/bootstrap/cache/*.php
+!/bootstrap/cache/.gitignore
+/composer.phar
+/database/*.sqlite
 /storage/logs/*.log
 
 /storage/app/*
@@ -25,7 +31,10 @@ yarn-error.log
 /storage/framework/cache/*
 /storage/framework/sessions/*
 /storage/framework/testing/*
+/storage/framework/views/*.php
 /storage/framework/views/*
+!/storage/framework/views/.gitignore
 /storage/logs/*
+!/storage/logs/.gitignore
 /storage/app/public/*
 !/storage/app/public/.gitignore

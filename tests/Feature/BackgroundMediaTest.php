@@ -194,4 +194,69 @@ class BackgroundMediaTest extends TestCase
         $xssResponse->assertStatus(422)
             ->assertJsonValidationErrors(['avatar_url']);
     }
+
+    public function test_azure_disk_upload_and_replace_background_leaves_no_orphans(): void
+    {
+        config(['filesystems.media_disk' => 'azure']);
+        Storage::fake('azure');
+        $artist = Artist::factory()->create([
+            'wallpaper_url' => 'https://assinart.blob.core.windows.net/media/wallpapers/old.png',
+        ]);
+        Storage::disk('azure')->put('wallpapers/old.png', 'x');
+
+        $response = $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/profile/background', [
+                'background' => UploadedFile::fake()->create('bg.png', 100, 'image/png'),
+            ])
+            ->assertStatus(200);
+
+        Storage::disk('azure')->assertMissing('wallpapers/old.png');
+        Storage::disk('azure')->assertExists('wallpapers/' . basename($response->json('wallpaper_url')));
+        $this->assertCount(1, Storage::disk('azure')->allFiles('wallpapers'));
+    }
+
+    public function test_patch_profile_rejects_malicious_base64_svg_invalid_base64_and_invalid_hex(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $safeBase64 = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['wallpaper_url' => $safeBase64])
+            ->assertStatus(200);
+
+        $unsafePayloads = [
+            'data:image/svg+xml;base64,' . base64_encode('<svg><script>alert(1)</script></svg>'),
+            'data:image/svg+xml;base64,' . base64_encode('<svg><foreignObject></foreignObject></svg>'),
+            'data:image/svg+xml;base64,' . base64_encode('<svg><animate attributeName="href" values="javascript:alert(1)"/></svg>'),
+            'data:image/svg+xml;base64,' . base64_encode('<svg onload="alert(1)"></svg>'),
+            'data:image/svg+xml;utf8,%3Csvg%3E%26%23x3C%3Bscript%3Ealert(1)%3C/script%3E%3C/svg%3E',
+            'data:image/svg+xml;base64,!!!invalid-base64!!!',
+        ];
+
+        foreach ($unsafePayloads as $payload) {
+            $this->actingAs($artist, 'sanctum')
+                ->patchJson('/api/v1/profile', ['wallpaper_url' => $payload])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['wallpaper_url']);
+        }
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['background' => 'color:not-hex'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['background']);
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', ['cover' => 'color:#12'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cover']);
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson('/api/v1/profile', [
+                'background_color' => 'blue',
+                'font_color' => '#GGGGGG',
+                'circular_icon_background' => 'invalid',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['background_color', 'font_color', 'circular_icon_background']);
+    }
 }

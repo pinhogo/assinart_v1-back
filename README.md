@@ -282,8 +282,22 @@ public function reorder(Request $request): JsonResponse
 ## 8. Guia de Instalação e Execução Local
 
 ### Pré-requisitos
-- **PHP** >= 8.2 (extensões recomendadas: `pdo_sqlite`, `mbstring`, `openssl`, `curl`)
+- **PHP** >= 8.2 (extensões obrigatórias: `pdo_sqlite`, `sqlite3`, `iconv`, `mbstring`, `openssl`, `curl`, `fileinfo`)
 - **Composer** >= 2.6
+
+> [!TIP]
+> **Atenção para usuários Linux (Arch / EndeavourOS / Fedora / Ubuntu):**  
+> No Linux, o driver de banco SQLite (`pdo_sqlite` / `sqlite3`) e a extensão `iconv` muitas vezes vêm desabilitados ou em pacotes separados:
+> - **Arch Linux / EndeavourOS:**
+>   ```bash
+>   sudo pacman -S --needed php php-sqlite composer
+>   sudo sed -i -E 's/^;(extension=(iconv|pdo_sqlite|sqlite3|bcmath|exif|intl))/\1/' /etc/php/php.ini
+>   ```
+> - **Ubuntu / Debian:**
+>   ```bash
+>   sudo apt install php-cli php-sqlite3 php-mbstring php-xml php-curl php-zip composer
+>   ```
+> Para mais detalhes e guia completo de ambiente local, consulte [README-local.md](README-local.md).
 
 ### Passo a Passo
 

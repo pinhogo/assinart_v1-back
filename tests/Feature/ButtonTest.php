@@ -5,6 +5,10 @@ namespace Tests\Feature;
 use App\Models\Artist;
 use App\Models\Button;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ButtonTest extends TestCase
@@ -940,5 +944,88 @@ class ButtonTest extends TestCase
             'show_icon_background' => false,
             'text_align' => 'right',
         ]);
+    }
+
+    public function test_store_and_update_reject_non_http_schemes_and_invalid_hex_colors(): void
+    {
+        $artist = Artist::factory()->create();
+        $button = Button::factory()->create(['artist_id' => $artist->id]);
+
+        foreach (['javascript:alert(1)', 'ftp://files.example.com/a', 'data:text/html,<script>1</script>'] as $badUrl) {
+            $this->actingAs($artist, 'sanctum')
+                ->postJson('/api/v1/buttons', ['title' => 'Bad', 'url' => $badUrl])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['url']);
+
+            $this->actingAs($artist, 'sanctum')
+                ->putJson("/api/v1/buttons/{$button->id}", ['url' => $badUrl])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['url']);
+        }
+
+        $this->actingAs($artist, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => 'Bad Colors',
+                'url' => 'https://example.com',
+                'button_color' => 'not-hex',
+                'text_color' => '#12',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['button_color', 'text_color']);
+
+        $this->actingAs($artist, 'sanctum')
+            ->patchJson("/api/v1/buttons/{$button->id}", [
+                'button_color' => 'rgb(1,2,3)',
+                'text_color' => '#GGGGGG',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['button_color', 'text_color']);
+    }
+
+    public function test_button_protects_artist_id_and_clicks_count_from_mass_assignment(): void
+    {
+        $artist = Artist::factory()->create();
+        $otherArtist = Artist::factory()->create();
+
+        $fillable = (new Button())->getFillable();
+        $this->assertNotContains('artist_id', $fillable);
+        $this->assertNotContains('clicks_count', $fillable);
+
+        $created = $artist->buttons()->create([
+            'artist_id' => $otherArtist->id,
+            'title' => 'Protected Button',
+            'url' => 'https://example.com',
+            'clicks_count' => 999,
+        ]);
+
+        $fresh = $created->fresh();
+        $this->assertSame($artist->id, $fresh->artist_id);
+        $this->assertSame(0, $fresh->clicks_count);
+    }
+
+    public function test_button_image_upload_enforces_throttle_20_per_minute(): void
+    {
+        Storage::fake('public');
+        $artist = Artist::factory()->create();
+        $button = Button::factory()->create(['artist_id' => $artist->id]);
+
+        try {
+            for ($i = 0; $i < 20; $i++) {
+                $this->actingAs($artist, 'sanctum')
+                    ->postJson("/api/v1/buttons/{$button->id}/image", [
+                        'image' => UploadedFile::fake()->create("btn{$i}.png", 50, 'image/png'),
+                    ])
+                    ->assertStatus(200);
+            }
+
+            $this->actingAs($artist, 'sanctum')
+                ->postJson("/api/v1/buttons/{$button->id}/image", [
+                    'image' => UploadedFile::fake()->create('btn21.png', 50, 'image/png'),
+                ])
+                ->assertStatus(429);
+        } finally {
+            RateLimiter::clear((string) $artist->id);
+            Cache::flush();
+        }
     }
 }

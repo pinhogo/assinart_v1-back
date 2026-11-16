@@ -1,0 +1,84 @@
+name: Deploy Backend (Azure App Service)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AZURE_WEBAPP_NAME: assinart-api
+  PHP_VERSION: '8.3'
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: fileinfo, mbstring, pdo_sqlite, pdo_pgsql, curl, zip
+          tools: composer:v2
+
+      - name: Install dependencies (with dev) and run test suite
+        run: |
+          composer install --prefer-dist --no-interaction --optimize-autoloader
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan test
+
+      - name: Build clean production archive without .env or dev dependencies
+        run: |
+          BUILD_DIR="${{ runner.temp }}/assinart-build"
+          ZIP_PATH="${{ runner.temp }}/assinart-back.zip"
+          rm -rf "${BUILD_DIR}" "${ZIP_PATH}"
+          mkdir -p "${BUILD_DIR}"
+
+          git archive --format=tar HEAD | tar -x -C "${BUILD_DIR}"
+          cd "${BUILD_DIR}"
+
+          rm -rf tests context docs documentacao .agents .github \
+                 bootstrap/cache/*.php database/*.sqlite composer.phar \
+                 storage/logs/*.log storage/framework/views/*.php \
+                 deploy-prompt.json README-local.md run.sh .env*
+
+          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+          # Pré-gera caches que não dependem de secrets/App Settings de runtime
+          APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+            php artisan route:cache
+          APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+            php artisan view:cache
+          rm -f bootstrap/cache/config.php .env*
+
+          chmod +x azure/startup.sh azure/backup.sh azure/provision.sh
+
+          # Garante ausência de artefatos proibidos no pacote final
+          test ! -e .env
+          test ! -d tests
+          test ! -d vendor/nunomaduro/collision
+          test ! -f database/database.sqlite
+
+          zip -rq "${ZIP_PATH}" . -x "*.git*" ".env*"
+
+      - name: Upload rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assinart-back-rollback-zip
+          path: ${{ runner.temp }}/assinart-back.zip
+          retention-days: 30
+
+      - name: Deploy to Azure App Service
+        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE != '' }}
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ runner.temp }}/assinart-back.zip

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 trait ManagesProfileMedia
 {
@@ -15,9 +14,9 @@ trait ManagesProfileMedia
         $request->validate(['avatar' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120']);
         $artist = $request->user();
 
-        $this->deleteFileFromStorage($artist->avatar_url);
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $artist->update(['avatar_url' => Storage::url($path)]);
+        $this->deleteFileFromStorage($artist->avatar_url, $artist->id);
+        $url = $this->storeMediaFile($request->file('avatar'), 'avatars');
+        $artist->update(['avatar_url' => $url]);
 
         return response()->json([
             'status' => 'success',
@@ -30,7 +29,7 @@ trait ManagesProfileMedia
     public function deleteAvatar(Request $request): JsonResponse
     {
         $artist = $request->user();
-        $this->deleteFileFromStorage($artist->avatar_url);
+        $this->deleteFileFromStorage($artist->avatar_url, $artist->id);
         $artist->update(['avatar_url' => null]);
         return response()->json(['status' => 'success', 'message' => 'Avatar removido com sucesso.'], 200);
     }
@@ -40,9 +39,9 @@ trait ManagesProfileMedia
         $request->validate(['cover' => 'required|image|mimes:jpeg,png,jpg,webp|max:10240']);
         $artist = $request->user();
 
-        $this->deleteFileFromStorage($artist->cover_url);
-        $path = $request->file('cover')->store('covers', 'public');
-        $artist->update(['cover_url' => Storage::url($path)]);
+        $this->deleteFileFromStorage($artist->cover_url, $artist->id);
+        $url = $this->storeMediaFile($request->file('cover'), 'covers');
+        $artist->update(['cover_url' => $url]);
 
         return response()->json([
             'status' => 'success',
@@ -55,7 +54,7 @@ trait ManagesProfileMedia
     public function deleteCover(Request $request): JsonResponse
     {
         $artist = $request->user();
-        $this->deleteFileFromStorage($artist->cover_url);
+        $this->deleteFileFromStorage($artist->cover_url, $artist->id);
         $artist->update(['cover_url' => null, 'cover_color' => null]);
         return response()->json(['status' => 'success', 'message' => 'Capa removida com sucesso.'], 200);
     }
@@ -66,9 +65,9 @@ trait ManagesProfileMedia
         $request->validate([$fileKey => 'required|image|mimes:jpeg,png,jpg,webp|max:10240']);
         $artist = $request->user();
 
-        $this->deleteFileFromStorage($artist->wallpaper_url);
-        $path = $request->file($fileKey)->store('wallpapers', 'public');
-        $artist->update(['wallpaper_url' => Storage::url($path), 'background_id' => null]);
+        $this->deleteFileFromStorage($artist->wallpaper_url, $artist->id);
+        $url = $this->storeMediaFile($request->file($fileKey), 'wallpapers');
+        $artist->update(['wallpaper_url' => $url, 'background_id' => null]);
 
         return response()->json([
             'status' => 'success',
@@ -82,7 +81,7 @@ trait ManagesProfileMedia
     public function deleteBackground(Request $request): JsonResponse
     {
         $artist = $request->user();
-        $this->deleteFileFromStorage($artist->wallpaper_url);
+        $this->deleteFileFromStorage($artist->wallpaper_url, $artist->id);
         $artist->update(['wallpaper_url' => null, 'background_id' => null, 'background_color' => '#FFFFFF']);
         return response()->json(['status' => 'success', 'message' => 'Plano de fundo removido com sucesso.'], 200);
     }

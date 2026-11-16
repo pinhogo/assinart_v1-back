@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Concerns\ManagesProfileMedia;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateProfileRequest;
 use App\Models\Artist;
+use App\Rules\HexColor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,7 +40,14 @@ class ProfileController extends Controller
 
         if ($request->has('background') && is_string($bg = $request->input('background'))) {
             if (str_starts_with($bg, 'color:')) {
-                $validated['background_color'] = substr($bg, 6);
+                $hexColor = substr($bg, 6);
+                if (!HexColor::isValid($hexColor)) {
+                    return response()->json([
+                        'message' => 'A cor de fundo deve ser um código hexadecimal válido (#RGB ou #RRGGBB).',
+                        'errors' => ['background' => ['A cor de fundo deve ser um código hexadecimal válido (#RGB ou #RRGGBB).']],
+                    ], 422);
+                }
+                $validated['background_color'] = $hexColor;
                 $validated['background_id'] = null;
             } elseif (str_starts_with($bg, 'preset:')) {
                 $validated['background_id'] = substr($bg, 7);
@@ -52,7 +60,14 @@ class ProfileController extends Controller
                 $validated['cover_url'] = null;
                 $validated['cover_color'] = null;
             } elseif (is_string($cov) && str_starts_with($cov, 'color:')) {
-                $validated['cover_color'] = substr($cov, 6);
+                $hexColor = substr($cov, 6);
+                if (!HexColor::isValid($hexColor)) {
+                    return response()->json([
+                        'message' => 'A cor da capa deve ser um código hexadecimal válido (#RGB ou #RRGGBB).',
+                        'errors' => ['cover' => ['A cor da capa deve ser um código hexadecimal válido (#RGB ou #RRGGBB).']],
+                    ], 422);
+                }
+                $validated['cover_color'] = $hexColor;
                 $validated['cover_url'] = null;
             }
         }
@@ -66,6 +81,19 @@ class ProfileController extends Controller
 
         if (array_key_exists('is_published', $validated)) {
             $validated['is_published'] = (bool) $validated['is_published'];
+        }
+
+        if (($validated['is_published'] ?? false) === true && $artist->email_verified_at === null) {
+            $message = 'Confirme seu e-mail antes de publicar seu perfil.';
+
+            return response()->json([
+                'status' => 'error',
+                'code' => 'email_not_verified',
+                'message' => $message,
+                'errors' => [
+                    'is_published' => [$message],
+                ],
+            ], 422);
         }
 
         if (array_key_exists('circular_shadow_enabled', $validated)) {

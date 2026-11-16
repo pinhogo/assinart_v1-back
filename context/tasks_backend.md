@@ -213,3 +213,151 @@
     - [x] Cubra `circular_icon_background` hexadecimal do artista como fallback em `PublicProfileTest`.
     - [x] Atualize o contrato de `circular_links[]` na seção 7.1 de `context/api_contracts.md`.
   - **Critério de aceite:** `resolved_circular_bg` retorna `#ACE1AF` para botão circular com `button_color` hexadecimal válido. Execução de `php artisan test` fica a cargo do orquestrador.
+
+---
+
+## Fase 8: Infraestrutura de Produção no Azure (`DONE`)
+
+> Spec completa em `assinart_v1/context/BACKLOG_MELHORIAS.md` e nas Issues `#327` / `#328`. SQLite fica restrito ao dev local e ao `phpunit.xml`.
+
+- [x] **Task 8.1 (`#327` / `API-12`): Banco de Produção no Azure e SQLite Apenas em Dev**
+  - **Arquivos:** `.env.example`, `config/database.php`, `database/migrations/0001_01_01_000004_create_jobs_table.php`, `phpunit.xml`, `bootstrap/app.php`, `tests/Feature/DatabaseProductionConfigTest.php`, `context/data_dictionary.md`
+  - **Escopo:**
+    - [x] Publique `config/database.php` e configure SSL/TLS via ambiente para Azure PostgreSQL ou MySQL.
+    - [x] Crie migration para `jobs`, `job_batches` e `failed_jobs` ou alinhe `QUEUE_CONNECTION`.
+    - [x] Atualize `.env.example` restringindo SQLite ao dev local.
+    - [x] Audite migrations e `LOWER(username)` em `UsernameController.php` e `ArtistUsername.php` no SGBD alvo.
+    - [x] Valide `/up` com conexão ao banco e execute `migrate:fresh --seed` no ambiente alvo.
+    - [x] Atualize testes PHPUnit e `context/data_dictionary.md`.
+
+- [x] **Task 8.2 (`#328` / `API-13`): Storage de Mídia no Azure Blob Storage**
+  - **Arquivos:** `composer.json`, `composer.lock`, `config/filesystems.php`, `app/Http/Controllers/Api/Concerns/InteractsWithMediaStorage.php`, `ManagesProfileMedia.php`, `ManagesButtonReorderAndImage.php`, `app/Http/Controllers/Api/ButtonController.php`, `app/Http/Requests/UpdateProfileRequest.php`, `tests/Feature/MediaStorageTest.php`, `tests/Feature/BackgroundMediaTest.php`, `tests/Feature/AccountDeletionTest.php`, `context/api_contracts.md`
+  - **Escopo:**
+    - [x] Adicione adapter Flysystem Azure Blob (`azure-oss/storage-blob-laravel`) e registre disco `azure` em `config/filesystems.php`.
+    - [x] Configure `MEDIA_DISK` e `AZURE_STORAGE_*` em `.env.example`.
+    - [x] Centralize disco de mídia e extração de path em `InteractsWithMediaStorage.php`.
+    - [x] Remova hardcode de `disk('public')` e `'/storage/'` nos Concerns e em `ButtonController.php`.
+    - [x] Revise `UpdateProfileRequest.php` e documente CORS e acesso público do container.
+    - [x] Atualize `MediaStorageTest.php`, `BackgroundMediaTest.php` e `AccountDeletionTest.php`.
+
+---
+
+## Fase 9: Deploy no Azure App Service (`DONE` — Infraestrutura, Hardening, Scripts, CI e Testes Validados)
+
+> Fonte: `context/DEPLOY_PLAN.md` e revisão de furos. Esta fase usa SQLite em `/home/data` apenas no MVP. As Tasks 8.1 e 8.2 substituem SQLite e disco local após o MVP.
+> Execute a Task 9.1 antes das demais. Rode os testes em PHP 8.3 real, não no PHP do Termux (o polyfill de `finfo` mascara a validação de MIME).
+
+- [x] **Task 9.1 (`API-14`): Proxy Reverso, CORS e Hardening**
+  - **Arquivos:** `bootstrap/app.php`, `config/cors.php`, `.env.example`, `tests/Feature/CorsSecurityTest.php`
+  - **Escopo:**
+    - [x] Adicione `$middleware->trustProxies(at: '*')` em `bootstrap/app.php` *(concluído em `API-12` / `5635c9c`)*.
+    - [x] Adicione `https://www.assin.art` e `CORS_ALLOWED_ORIGINS` em `config/cors.php`.
+    - [x] Limite `paths` de CORS a `api/*` e às rotas públicas necessárias. Remova o `'*'`.
+    - [x] Defina `supports_credentials` como `false`. A autenticação usa Bearer Token.
+    - [x] Remova `SANCTUM_STATEFUL_DOMAINS` do plano. `statefulApi()` está desativado.
+    - [x] Cubra o preflight `OPTIONS` e o IP real via `X-Forwarded-For` em testes Feature.
+    - [x] Verifique que `/storage/*` não colide com `GET /{username}`.
+  - **Critério de aceite:** O preflight de `https://assin.art` retorna `204` com `Access-Control-Allow-Origin`. O `RateLimiter` usa o IP do cliente.
+
+- [x] **Task 9.2 (`API-15`): Arquivos de Runtime do Azure (`azure/`)**
+  - **Arquivos:** `azure/nginx.conf`, `azure/startup.sh`, `public/.user.ini`, `.gitattributes`
+  - **Escopo:**
+    - [x] Crie `azure/nginx.conf` com `root` em `public`, `client_max_body_size 16M` e `try_files`.
+    - [x] Bloqueie arquivos ocultos e a execução de `.php` em `/storage/`.
+    - [x] Crie `public/.user.ini` com `upload_max_filesize=12M` e `post_max_size=16M`. Confirme que o `PHP_INI_SCAN_DIR` do runtime existe antes de usá-lo.
+    - [x] Crie `azure/startup.sh` idempotente. Crie as pastas e o symlink de `storage/app/public` para `/home/data`.
+    - [x] Copie o Nginx e recarregue com `nginx -s reload`. Teste o comando no App Service real.
+    - [x] Copie o backup de `database.sqlite` com timestamp antes do `migrate --force`.
+    - [x] Gere `config:cache`, `route:cache` e `view:cache` no build, não no startup. Valide `route:cache` localmente.
+    - [x] Configure `.gitattributes` com `export-ignore` para `context/`, `docs/`, `documentacao/`, `tests/`, `*.md`, `run.sh` e `composer.phar`.
+  - **Critério de aceite:** O startup conclui em menos de 230 s. Um segundo boot não altera dados.
+
+- [x] **Task 9.3 (`API-16`): Limpeza do Repositório e Pacote de Build**
+  - **Arquivos:** `.gitignore`, `bootstrap/cache/`, `database/database.sqlite`, `composer.phar`, `.github/workflows/deploy-backend.yml`
+  - **Escopo:**
+    - [x] Remova `bootstrap/cache/*.php`, `database/database.sqlite` e `composer.phar` do índice Git.
+    - [x] Adicione os mesmos caminhos ao `.gitignore`.
+    - [x] Crie o workflow com PHP 8.3 (`shivammathur/setup-php@v2`), `composer install --no-dev` e `php artisan test`.
+    - [x] Gere o ZIP sem `.env*`, sem `tests/` e sem `vendor` de desenvolvimento.
+    - [x] Publique o ZIP com `az webapp deploy`. Guarde o ZIP anterior como artefato de rollback.
+    - [x] Confirme que nenhum `.env` entra no ZIP.
+  - **Critério de aceite:** O ZIP não contém `collision`, `termwind`, `.env` nem `.sqlite`. A suíte passa em PHP 8.3.
+
+- [x] **Task 9.4 (`API-17`): Provisionamento Azure e App Settings**
+  - **Arquivos:** `azure/provision.sh`, `azure/appsettings.example.env`
+  - **Escopo:**
+    - [x] Valide a assinatura Azure for Students, a quota de B1 e a região (`brazilsouth` ou `eastus2`).
+    - [x] Valide a unicidade do nome do Web App.
+    - [x] Crie `azure/provision.sh` com grupo, plano B1 Linux e Web App `PHP:8.3`.
+    - [x] Ative `https-only`, `always-on`, TLS 1.2 e FTPS desativado.
+    - [x] Defina `WEBSITES_CONTAINER_START_TIME_LIMIT` e fixe uma única instância.
+    - [x] Configure `APP_KEY`, `APP_URL`, `FILESYSTEM_DISK=public`, `QUEUE_CONNECTION=sync`, `SESSION_DRIVER=file`, `CACHE_STORE=file` e `LOG_CHANNEL=stderr`.
+    - [x] Crie um alerta de custo e de orçamento no Azure.
+  - **Critério de aceite:** `GET /up` retorna `200` em `https://<app>.azurewebsites.net`.
+
+- [x] **Task 9.5 (`API-18`): Risco de SQLite em `/home` e Backup**
+  - **Arquivos:** `azure/backup.sh`, `config/database.php`
+  - **Escopo:**
+    - [x] Execute teste de carga em `POST /api/v1/track` e `GET /r/{id}` com SQLite em `/home/data`.
+    - [x] Habilite `PRAGMA journal_mode=WAL` e `busy_timeout` na conexão SQLite, se o teste mostrar `database is locked`.
+    - [x] Crie `azure/backup.sh` para copiar o banco com timestamp.
+    - [x] Documente o procedimento de restauração.
+    - [x] Defina o gatilho de migração para a Task 8.1 (PostgreSQL ou MySQL).
+  - **Critério de aceite:** O teste não registra `database is locked`. O backup restaura o banco.
+
+- [x] **Task 9.6 (`API-19`): Smoke Test, E2E e Rollback**
+  - **Arquivos:** `context/DEPLOY_PLAN.md`
+  - **Escopo:**
+    - [x] Conecte o frontend: defina `VITE_API_BASE_URL` e `VITE_USE_MOCK_API=false` e dispare `deploy-pages.yml`.
+    - [x] Valide DNS e HTTPS de `assin.art` e `www.assin.art`.
+    - [x] Execute os smoke tests: `/up`, `/`, `/api/v1/usernames/check` e o preflight `OPTIONS`.
+    - [x] Execute o E2E anônimo: cadastro, upload maior que 2 MB, publicação, `GET /{username}`, `POST /track` e `GET /r/{id}`.
+    - [x] Reinicie o Web App e confirme que banco e uploads persistem.
+    - [x] Documente que `forgot-password` não envia e-mail (`MAIL_MAILER=log`).
+    - [x] Atualize o rollback: restaure o ZIP anterior, restaure o backup do banco e reverta o schema.
+    - [x] Atualize `context/DEPLOY_PLAN.md` com as correções desta fase.
+  - **Critério de aceite:** O E2E passa em produção. O rollback roda em menos de 15 minutos.
+
+---
+
+## Fase 10: Confirmação de E-mail, E-mail de Contato e Simulação de Carga (`API-20`, `API-21`, `API-22`, `API-23` `DONE`)
+
+> Origem: `context/BACKLOG_MELHORIAS.md` (`API-20`, `API-21`, `API-22`, `API-23`) e `assinart_v1/context/BACKLOG_MELHORIAS.md` (`CAD-11`, `FIX-GLB-22`).
+> Executado via Orca (`run_58b77ee84902`). Todas as entregas (`API-20`, `API-21`, `API-22`, `API-23`, `CAD-11`, `FIX-GLB-22`) concluídas em `DONE`.
+
+- [x] **Task 10.1 (`#3` / `API-20`): E-mail de Confirmação Real e Validação de Token**
+  - **Arquivos:** `database/migrations/2026_11_16_000001_create_email_verification_tokens_table.php`, `app/Mail/VerifyEmailMail.php`, `resources/views/emails/verify-email.blade.php`, `app/Services/EmailVerificationService.php`, `config/app.php`, `app/Http/Controllers/Api/AuthController.php`, `app/Http/Controllers/Api/Concerns/ManagesPasswordAndEmail.php`, `.env.example`, `tests/Feature/EmailVerificationTest.php`, `context/api_contracts.md`, `context/data_dictionary.md`
+  - **Escopo:**
+    - [x] Crie a migration `email_verification_tokens` (`email`, `token_hash`, `expires_at`, `created_at`).
+    - [x] Crie `VerifyEmailMail` com link `FRONTEND_URL/confirmacao-email?email=...&token=...`.
+    - [x] Dispare o e-mail em `register` e em `resendVerification` com throttle de 60 s e resposta genérica anti-enumeração.
+    - [x] Valide `email` e `token` em `POST /api/v1/auth/email/verify` (`422` se inválido/expirado) preservando suporte legado a `hasValidSignature()`.
+    - [x] Remova a auto-verificação de `email_verified_at` em `OnboardingController::saveButtons`.
+    - [x] Cubra todo o fluxo com `Mail::fake()` em `tests/Feature/EmailVerificationTest.php`.
+  - **Critério de aceite:** Conta nova mantém `email_verified_at = null` até validar o token recebido por e-mail. (`447 passed, 3 skipped`).
+
+- [x] **Task 10.2 (`#2` / `API-21`): Bloqueio de Publicação sem E-mail Verificado**
+  - **Arquivos:** `app/Http/Controllers/Api/ProfileController.php`, `tests/Feature/ProfilePublicationTest.php`, `tests/Feature/UsernameNormalizationTest.php`, `context/api_contracts.md`
+  - **Escopo:**
+    - [x] Rejeite `is_published: true` / `publication_status: 'published'` com `422` (`code: email_not_verified`) enquanto `email_verified_at` for nulo.
+    - [x] Mantenha rotas de onboarding e rascunho liberadas antes da confirmação.
+    - [x] Cubra o bloqueio e a liberação pós-verificação em `ProfilePublicationTest.php`.
+  - **Critério de aceite:** Conta não verificada recebe `422` ao tentar publicar e `200` após confirmar o e-mail. (`454 passed, 3 skipped`).
+
+- [x] **Task 10.3 (`#4` / `API-22`): Roteamento de `sac@assin.art` e `contato@assin.art` para Gmail Pessoal (`DONE`)**
+  - **Arquivos:** `.env.example`, `azure/appsettings.example.env`, `config/mail.php`, `tests/Feature/MailConfigTest.php`, `context/DEPLOY_PLAN.md`
+  - **Escopo:**
+    - [x] Configure **ImprovMX** no DNS da Hostinger para `sac@assin.art` e `contato@assin.art` encaminhando ao Gmail pessoal (sem commitar o Gmail no Git).
+    - [x] Publique `MX`, `SPF` combinado (`include:spf.improvmx.com include:spf.brevo.com`), `DKIM` e `DMARC` no DNS de `assin.art` alinhados ao **Brevo** (`smtp-relay.brevo.com:587`) + Azure App Settings.
+    - [x] Alinhe `MAIL_FROM_ADDRESS` e `MAIL_REPLY_TO_ADDRESS` em `.env.example`/`config/mail.php` e documente o passo a passo gratuito para Hostinger em `context/DEPLOY_PLAN.md`.
+    - [x] Valide com `dig @1.1.1.1` e envio/recebimento real confirmado pelo proprietário em `sac@assin.art` e `contato@assin.art`.
+  - **Critério de aceite:** E-mail enviado para `sac@assin.art` chega à caixa do Gmail pessoal sem erro de DNS/SPF.
+
+- [x] **Task 10.4 (`#20` / `API-23`): Simulação de Teste de Carga Local em Container com Limites do Azure App Service (`B1`)**
+  - **Arquivos:** `docker/azure-sim/Dockerfile`, `docker/azure-sim/entrypoint.sh`, `docker/azure-sim/compose.yml`, `.dockerignore`, `scripts/load-test-azure-sim.sh`, `tests/Feature/AzureSimContainerConfigTest.php`, `composer.json`, `composer.lock`, `context/DEPLOY_PLAN.md`
+  - **Escopo:**
+    - [x] Crie `docker/azure-sim/Dockerfile` com PHP 8.3-FPM + Nginx reproduzindo `azure/nginx.conf`, `public/.user.ini` e o boot equivalente ao `azure/startup.sh`.
+    - [x] Crie `docker/azure-sim/compose.yml` com limites do SKU `B1` (`1.0` vCPU, `1792 MB` RAM, 1 instância) e volume persistente em `/home/data` (com modo SQLite `WAL` e profile `postgres`).
+    - [x] Crie `scripts/load-test-azure-sim.sh` para carga concorrente simultânea em `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up`.
+    - [x] Execute a bateria ao vivo no Docker (`1.0 vCPU / 1792 MB`, `20 VUs x 20s`) para SQLite `WAL` (`1829/1829` OK, `0` locks, `p95=387.27ms`) e PostgreSQL 16 (`1316/1316` OK, `p95=397.67ms`), fixando `platform.php = 8.3.0` em `composer.json`/`composer.lock` e registrando os dados em `context/DEPLOY_PLAN.md`.
+  - **Critério de aceite:** Ambiente limitado a `1 vCPU / 1,75 GB` sobe com os mesmos configs do `azure/` e conclui carga concorrente registrando latência, `0` erros `5xx` e evidência sobre locks do SQLite vs PostgreSQL.

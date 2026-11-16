@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Concerns;
 
 use App\Models\Artist;
+use App\Services\EmailVerificationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,11 +21,10 @@ trait ManagesPasswordAndEmail
     public function forgotPassword(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'email' => ['required', 'string', 'email', 'exists:artists,email'],
+            'email' => ['required', 'string', 'email'],
         ], [
             'email.required' => 'O campo e-mail é obrigatório.',
             'email.email' => 'Informe um endereço de e-mail válido.',
-            'email.exists' => 'Não encontramos nenhum cadastro com este e-mail.',
         ]);
 
         if ($validator->fails()) {
@@ -36,19 +36,18 @@ trait ManagesPasswordAndEmail
         }
 
         $email = strtolower(trim($request->input('email')));
-        $rawToken = Str::random(64);
 
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $email],
-            [
-                'token' => Hash::make($rawToken),
-                'created_at' => now(),
-            ]
-        );
+        if (Artist::where('email', $email)->exists()) {
+            $rawToken = Str::random(64);
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $email],
+                ['token' => Hash::make($rawToken), 'created_at' => now()]
+            );
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Link de recuperação enviado com sucesso.',
+            'message' => 'Se o e-mail estiver cadastrado, enviaremos um link de recuperação.',
         ], 200);
     }
 
@@ -60,14 +59,14 @@ trait ManagesPasswordAndEmail
         $validator = Validator::make($request->all(), [
             'token' => ['required', 'string'],
             'email' => ['required', 'string', 'email', 'exists:artists,email'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ], [
             'token.required' => 'O token de redefinição é obrigatório.',
             'email.required' => 'O campo e-mail é obrigatório.',
             'email.email' => 'Informe um endereço de e-mail válido.',
             'email.exists' => 'E-mail não encontrado.',
             'password.required' => 'A senha é obrigatória.',
-            'password.min' => 'A senha deve conter pelo menos 6 caracteres.',
+            'password.min' => 'A senha deve conter pelo menos 8 caracteres.',
             'password.confirmed' => 'A confirmação de senha não confere.',
         ]);
 
@@ -80,29 +79,16 @@ trait ManagesPasswordAndEmail
         }
 
         $email = strtolower(trim($request->input('email')));
-        $token = $request->input('token');
-
+        $token = (string) $request->input('token');
         $record = DB::table('password_reset_tokens')->where('email', $email)->first();
 
-        if (!$record) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Token de recuperação inválido ou expirado.',
-            ], 400);
-        }
+        $isBcrypt = str_starts_with((string) ($record->token ?? ''), '$2');
+        $isValid = $record && (
+            hash_equals((string) $record->token, hash('sha256', $token))
+            || ($isBcrypt && Hash::check($token, $record->token))
+        );
 
-        $isValid = Hash::check($token, $record->token)
-            || hash_equals((string) $record->token, (string) $token)
-            || hash_equals((string) $record->token, hash('sha256', (string) $token));
-
-        if (!$isValid) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Token de recuperação inválido ou expirado.',
-            ], 400);
-        }
-
-        if ($record->created_at && Carbon::parse($record->created_at)->addMinutes(60)->isPast()) {
+        if (!$isValid || ($record->created_at && Carbon::parse($record->created_at)->addMinutes(60)->isPast())) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Token de recuperação inválido ou expirado.',
@@ -113,6 +99,7 @@ trait ManagesPasswordAndEmail
         if ($artist) {
             $artist->password = Hash::make($request->input('password'));
             $artist->save();
+            $artist->tokens()->delete();
         }
 
         DB::table('password_reset_tokens')->where('email', $email)->delete();
@@ -124,15 +111,14 @@ trait ManagesPasswordAndEmail
     }
 
     /**
-     * Reenvia e-mail de confirmação com throttling estrito de 60 segundos.
+     * Reenvia e-mail de confirmação com throttling estrito de 60 segundos e sem enumeração.
      */
-    public function resendVerification(Request $request): JsonResponse
+    public function resendVerification(Request $request, EmailVerificationService $verificationService): JsonResponse
     {
-        $identifier = $request->user()?->id 
-            ?? $request->input('email') 
-            ?? $request->ip() 
-            ?? '127.0.0.1';
-
+        $user = $request->user('sanctum') ?? $request->user();
+        $ip = $request->ip() ?? '127.0.0.1';
+        $email = $verificationService->normalizeEmail((string) $request->input('email', ''));
+        $identifier = $user?->id ?? ($ip . '|' . $email);
         $throttleKey = 'resend-email-verification|' . $identifier;
 
         if (RateLimiter::tooManyAttempts($throttleKey, 1)) {
@@ -146,32 +132,23 @@ trait ManagesPasswordAndEmail
 
         RateLimiter::hit($throttleKey, 60);
 
+        $artist = $user ?? ($email !== '' ? Artist::where('email', $email)->first() : null);
+
+        if ($artist && $artist->email_verified_at === null) {
+            $verificationService->sendVerificationEmail($artist);
+        }
+
         return response()->json([
             'status' => 'success',
-            'message' => 'E-mail de confirmação reenviado.',
+            'message' => 'Se o e-mail estiver cadastrado e ainda não confirmado, enviaremos um novo link de confirmação.',
         ], 200);
     }
 
     /**
-     * Confirma o e-mail do artista marcando email_verified_at.
+     * Confirma o e-mail do artista via token SHA-256 ({ email, token }) ou URL assinada válida.
      */
-    public function verifyEmail(Request $request): JsonResponse
+    public function verifyEmail(Request $request, EmailVerificationService $verificationService): JsonResponse
     {
-        $artist = $request->user();
-
-        if (!$artist && $request->filled('email')) {
-            $artist = Artist::where('email', strtolower(trim($request->input('email'))))->first();
-        }
-
-        if ($artist) {
-            $artist->email_verified_at = now();
-            $artist->save();
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'E-mail confirmado com sucesso.',
-            'email_verified_at' => $artist?->email_verified_at,
-        ], 200);
+        return $verificationService->verifyFromRequest($request);
     }
 }

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Rota pública para coleta anônima de telemetria
-Route::post('/track', [MetricsController::class, 'track']);
+Route::post('/track', [MetricsController::class, 'track'])->middleware('throttle:120,1');
 
 // Rota protegida para consulta de métricas pelo artista logado
 Route::middleware('auth:sanctum')->group(function () {

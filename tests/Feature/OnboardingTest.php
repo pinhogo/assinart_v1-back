@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Artist;
 use App\Models\Button;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class OnboardingTest extends TestCase
@@ -345,7 +347,7 @@ class OnboardingTest extends TestCase
 
         $artist->refresh();
         $this->assertEquals('pill', $artist->button_shape);
-        $this->assertNotNull($artist->email_verified_at);
+        $this->assertNull($artist->email_verified_at);
     }
 
     /**
@@ -411,7 +413,7 @@ class OnboardingTest extends TestCase
         $this->assertEquals('#DAD3EC', $artist->background_color);
         $this->assertEquals('lavender', $artist->background_id);
         $this->assertEquals('rounded', $artist->button_shape);
-        $this->assertNotNull($artist->email_verified_at);
+        $this->assertNull($artist->email_verified_at);
         $this->assertEquals(2, $artist->buttons()->count());
     }
 
@@ -688,5 +690,84 @@ class OnboardingTest extends TestCase
                 ],
             ]);
         $this->assertTrue($camelPut->json('data.circular_shadow_enabled'));
+    }
+
+    public function test_step1_rejects_whatsapp_without_digits_and_unsafe_schemes(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'links' => [
+                    ['platform' => 'whatsapp', 'url' => 'sem-numeros'],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['links']);
+
+        foreach (['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)'] as $unsafe) {
+            $this->actingAs($artist, 'sanctum')
+                ->putJson('/api/v1/onboarding/links', [
+                    'links' => [
+                        ['platform' => 'custom', 'url' => $unsafe],
+                    ],
+                ])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['links']);
+        }
+    }
+
+    public function test_step1_deletes_old_button_images_from_storage_when_resyncing_links(): void
+    {
+        Storage::fake('public');
+        $artist = Artist::factory()->create();
+        $oldPath = UploadedFile::fake()->image('old_card.png')->store('cards', 'public');
+
+        Button::factory()->create([
+            'artist_id' => $artist->id,
+            'image_url' => Storage::url($oldPath),
+        ]);
+
+        Storage::disk('public')->assertExists($oldPath);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/links', [
+                'links' => [
+                    ['platform' => 'website', 'url' => 'https://assin.art'],
+                ],
+            ])
+            ->assertStatus(200);
+
+        Storage::disk('public')->assertMissing($oldPath);
+    }
+
+    public function test_step3_validates_hex_colors_and_allows_auto_for_circular_icon_background(): void
+    {
+        $artist = Artist::factory()->create();
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'circular_icon_background' => 'auto',
+            ])
+            ->assertStatus(200);
+
+        $this->actingAs($artist, 'sanctum')
+            ->putJson('/api/v1/onboarding/buttons', [
+                'button_shape' => 'square',
+                'button_color' => 'invalid-color',
+                'button_text_color' => '#ZZZZZZ',
+                'button_shadow_color' => 'rgb(0,0,0)',
+                'circular_icon_background' => 'red',
+                'border_color' => '#12345',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors([
+                'button_color',
+                'button_text_color',
+                'button_shadow_color',
+                'circular_icon_background',
+                'border_color',
+            ]);
     }
 }
