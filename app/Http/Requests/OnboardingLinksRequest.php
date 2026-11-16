@@ -118,8 +118,25 @@ class OnboardingLinksRequest extends FormRequest
             $circularCount = 0;
 
             foreach ($links as $item) {
-                if (is_array($item) && ($item['display_mode'] ?? 'button') === 'circular') {
+                if (!is_array($item)) {
+                    continue;
+                }
+                if (($item['display_mode'] ?? 'button') === 'circular') {
                     $circularCount++;
+                }
+
+                $raw = trim((string) ($item['url'] ?? $item['value'] ?? ''));
+                if ($raw === '') {
+                    continue;
+                }
+
+                $compact = (string) preg_replace('/[\x00-\x20]+/', '', $raw);
+                if (preg_match('/^(javascript|data|vbscript):/i', $compact)) {
+                    $validator->errors()->add('links', 'O link informado contém um esquema de URL não permitido.');
+                }
+
+                if (($item['platform'] ?? null) === 'whatsapp' && preg_replace('/\D/', '', $raw) === '') {
+                    $validator->errors()->add('links', 'Informe um número de WhatsApp válido com dígitos.');
                 }
             }
 
