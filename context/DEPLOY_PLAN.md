@@ -309,3 +309,58 @@ Executar em **aba anônima** (sem cache ou sessão prévia):
 5. `API-20`..`API-22`, `CAD-11` e `FIX-GLB-22` para envio real de confirmação de e-mail, guarda de `/editor`, redirecionamento pós-login e encaminhamento de `sac@assin.art` ao Gmail pessoal.
 
 > **Nota pós-merge (`API-12` / `API-13` em `develop`):** `5635c9c` e `b8c092f` já incluíram `trustProxies(at: '*')`, `config/database.php`, migration `jobs`, healthcheck com DB em `/up` e disco `azure` (`MEDIA_DISK`). Quando configurar `DB_CONNECTION` gerenciado e `MEDIA_DISK=azure` no App Service, `API-18` (risco de SQLite em `/home`) torna-se dispensável.
+
+---
+
+## 8. Simulação Local Azure `B1` e Benchmark SQLite `WAL` vs PostgreSQL (`API-23`)
+
+> **Status de execução na criação (`2026-11-16`):** O daemon Docker (`dockerd` em `/var/run/docker.sock`) não estava ativo nesta sessão de trabalho. Nenhum número de carga foi fabricado; execute os comandos abaixo assim que iniciar o daemon Docker para coletar as métricas reais no hardware alvo.
+
+### 8.1 Artefatos do ambiente de simulação
+- [`docker/azure-sim/Dockerfile`](../docker/azure-sim/Dockerfile): imagem `php:8.3-fpm` + `nginx` com `mbstring`, `fileinfo`, `pdo_sqlite`, `pdo_pgsql`, `gd`, `zip` e `opcache`, copiando `azure/nginx.conf` (porta `8080`, `fastcgi_pass 127.0.0.1:9000`) e `public/.user.ini` (`PHP_INI_SCAN_DIR=/usr/local/etc/php/conf.d`).
+- [`docker/azure-sim/entrypoint.sh`](../docker/azure-sim/entrypoint.sh): prepara `/home/data/storage/app/public/{avatars,covers,cards,wallpapers}` e `/home/data/backups`, aguarda PostgreSQL quando `DB_CONNECTION=pgsql`, executa `azure/startup.sh`, ajusta permissões `www-data` e inicia `php-fpm` + `nginx`.
+- [`docker/azure-sim/compose.yml`](../docker/azure-sim/compose.yml): define os limites do SKU `B1` (`cpus: 1.0`, `mem_limit: 1792m` / `deploy.resources.limits`), volume persistente `/home/data`, flags SQLite (`DB_SQLITE_JOURNAL_MODE=WAL`, `DB_SQLITE_BUSY_TIMEOUT=5000`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`) e profile opcional `postgres` (`postgres:16-alpine` com healthcheck).
+- [`scripts/load-test-azure-sim.sh`](../scripts/load-test-azure-sim.sh): prepara um artista publicado + botão ativo e dispara carga concorrente contra `POST /api/v1/track`, `GET /r/{id}`, `GET /{username}` e `GET /up` (via `k6` / `grafana/k6`, com fallback nativo em `php` `curl_multi` ou `curl` + `xargs`), reportando total de requisições, taxa de erro `5xx`/timeout, `p50`/`p95` e ocorrências de `database is locked` nos logs.
+
+### 8.2 Comandos exatos após iniciar o daemon Docker
+
+1. **Iniciar o daemon Docker** (Linux com systemd ou Docker Desktop):
+   ```bash
+   sudo systemctl start docker
+   docker info
+   ```
+2. **Subir o container de simulação (`SQLite WAL`, padrão Azure B1):**
+   ```bash
+   docker compose -f docker/azure-sim/compose.yml up -d --build
+   # Alternativa sem Compose v2 (docker-compose legado ou docker run direto):
+   # docker-compose -f docker/azure-sim/compose.yml up -d --build
+   # docker build -f docker/azure-sim/Dockerfile -t assinart-azure-sim .
+   # docker run -d --name assinart-azure-sim-app --cpus=1.0 --memory=1792m -p 8080:8080 -v azure_sim_data:/home/data assinart-azure-sim
+   ```
+3. **Executar a bateria de carga comparativa (`SQLite WAL` vs `PostgreSQL`):**
+   ```bash
+   # 1) Benchmark SQLite WAL (API-18) sob 1.0 vCPU / 1792 MB
+   ./scripts/load-test-azure-sim.sh --db sqlite --vus 20 --duration 30
+
+   # 2) Benchmark PostgreSQL 16 (API-12) sob os mesmos limites do app container
+   ./scripts/load-test-azure-sim.sh --db pgsql --vus 20 --duration 30
+
+   # Opcional: forcar executor grafana/k6
+   ./scripts/load-test-azure-sim.sh --db sqlite --vus 20 --duration 30 --runner k6
+   ```
+4. **Encerrar e limpar containers/volumes após coleta:**
+   ```bash
+   docker compose -f docker/azure-sim/compose.yml --profile postgres down -v
+   ```
+
+### 8.3 Critério empírico de corte SQLite (`API-18`) -> PostgreSQL (`API-12`)
+
+Adote **PostgreSQL gerenciado (`API-12`)** imediatamente antes da abertura pública se o benchmark local ou a observabilidade em produção atingir **qualquer** um dos limites abaixo:
+
+| Indicador | Limite seguro (SQLite `WAL`) | Gatilho de corte para PostgreSQL (`API-12`) |
+| :--- | :--- | :--- |
+| Ocorrências de `database is locked` nos logs | `0` ocorrências | `>= 1` ocorrência em `docker logs` ou `storage/logs/laravel.log` |
+| Taxa de erro (`5xx` + timeout + lock) | `0.00%` | `> 0%` sob `20` VUs concorrentes |
+| Latência `p95` (`POST /api/v1/track` ou `GET /r/{id}`) | `<= 500 ms` | `> 500 ms` sustentado |
+| Tamanho do arquivo `database.sqlite` | `<= 100 MB` | `> 100 MB` |
+| Escala de instâncias / workers no App Service | `1` instância | Necessidade de `workers > 1` ou scale-out horizontal |
