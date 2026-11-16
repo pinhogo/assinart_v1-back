@@ -51,6 +51,7 @@ class UsernameNormalizationTest extends TestCase
         ])->assertStatus(201)->assertJsonPath('data.user.username', 'joao.silva');
 
         $joao = Artist::where('username', 'joao.silva')->firstOrFail();
+        $joao->forceFill(['email_verified_at' => now()])->save();
         $this->actingAs($joao, 'sanctum')
             ->patchJson('/api/v1/profile', ['username' => 'joao.silva', 'is_published' => true])
             ->assertStatus(200)

@@ -222,11 +222,23 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
   }
   ```
 
-### 4.2 Atualizar Perfil e Tema (`PATCH /api/v1/profile`)
+### 4.2 Atualizar Perfil e Tema (`PUT` / `PATCH /api/v1/profile`)
 - **Acesso:** Bearer Token.
 - **Corpo da Requisição:** Campos opcionais de perfil (incluindo `username` sob a mesma normalização e validação do registro: `[a-z0-9_.-]`, 2–30 caracteres, sem `.` inicial/final ou `..`, sem palavras reservadas e único em minúsculas), mídia polimórfica (`avatar`, `background`, `cover`), tema visual/tipográfico e estado de publicação (`is_published`: `boolean`; `publication_status`: `"draft" | "published"`). Quando ambos os campos de publicação aparecem na mesma requisição, `is_published` define o estado persistido.
 - **Resposta de Sucesso (200 OK):** Retorna envelope `{ status: "success", data: ArtistUser }` com o perfil atualizado, incluindo `is_published` e `publication_status`.
-- **Respostas de Erro:** 422 Unprocessable Entity (username inválido/em uso/reservado, enum inválido, valor booleano inválido em `is_published` ou palavras reservadas).
+- **Respostas de Erro:**
+  - `422 Unprocessable Entity`: username inválido/em uso/reservado, enum inválido, valor booleano inválido em `is_published` ou palavras reservadas.
+  - `422 Unprocessable Entity` (`code: "email_not_verified"`): tentativa de publicar perfil (`is_published: true` ou `publication_status: "published"`) enquanto `email_verified_at` for `null` (salvamento em rascunho e demais campos permanecem liberados):
+    ```json
+    {
+      "status": "error",
+      "code": "email_not_verified",
+      "message": "Confirme seu e-mail antes de publicar seu perfil.",
+      "errors": {
+        "is_published": ["Confirme seu e-mail antes de publicar seu perfil."]
+      }
+    }
+    ```
 
 ---
 

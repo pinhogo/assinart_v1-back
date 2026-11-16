@@ -83,6 +83,19 @@ class ProfileController extends Controller
             $validated['is_published'] = (bool) $validated['is_published'];
         }
 
+        if (($validated['is_published'] ?? false) === true && $artist->email_verified_at === null) {
+            $message = 'Confirme seu e-mail antes de publicar seu perfil.';
+
+            return response()->json([
+                'status' => 'error',
+                'code' => 'email_not_verified',
+                'message' => $message,
+                'errors' => [
+                    'is_published' => [$message],
+                ],
+            ], 422);
+        }
+
         if (array_key_exists('circular_shadow_enabled', $validated)) {
             if ($validated['circular_shadow_enabled'] === null) {
                 unset($validated['circular_shadow_enabled']);
