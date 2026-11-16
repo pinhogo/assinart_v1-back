@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api\Concerns;
 
+use App\Models\Artist;
+use App\Models\Button;
+use Closure;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 trait InteractsWithMediaStorage
 {
-    /**
-     * Nome do disco de mídia ativo (MEDIA_DISK). Usa 'public' quando vazio.
-     */
     protected function mediaDiskName(): string
     {
         $name = trim((string) config('filesystems.media_disk', env('MEDIA_DISK', 'public')));
@@ -23,9 +23,6 @@ trait InteractsWithMediaStorage
         return Storage::disk($this->mediaDiskName());
     }
 
-    /**
-     * Salva o arquivo no disco de mídia e retorna a URL pública.
-     */
     protected function storeMediaFile(UploadedFile $file, string $directory): string
     {
         $diskName = $this->mediaDiskName();
@@ -34,9 +31,6 @@ trait InteractsWithMediaStorage
         return Storage::disk($diskName)->url($path);
     }
 
-    /**
-     * Extrai o caminho relativo (avatars/..., cards/...) de URLs locais (/storage/...) ou Azure Blob.
-     */
     protected function extractRelativeStoragePath(?string $url): ?string
     {
         if (empty($url) || str_starts_with(trim($url), 'data:')) {
@@ -63,13 +57,15 @@ trait InteractsWithMediaStorage
         return $path;
     }
 
-    /**
-     * Exclui o arquivo do disco de mídia (com fallback seguro para URLs antigas /storage/ no disco public).
-     */
-    protected function deleteFileFromStorage(?string $url): void
+    protected function deleteFileFromStorage(?string $url, ?int $ownerArtistId = null): void
     {
         $relativePath = $this->extractRelativeStoragePath($url);
         if (!$relativePath) {
+            return;
+        }
+
+        $ownerId = $ownerArtistId ?? auth()->id();
+        if ($ownerId !== null && $this->isStoragePathOwnedByAnotherArtist($relativePath, (int) $ownerId)) {
             return;
         }
 
@@ -83,6 +79,70 @@ trait InteractsWithMediaStorage
         }
     }
 
+    protected function isStorageUrl(string $url): bool
+    {
+        $trimmed = trim($url);
+        if (str_starts_with($trimmed, '/storage/')) {
+            return true;
+        }
+
+        $path = ltrim((string) parse_url($trimmed, PHP_URL_PATH), '/');
+
+        return str_starts_with($path, 'storage/') || $this->stripAzureBase($trimmed) !== null;
+    }
+
+    protected function isStoragePathOwnedByAnotherArtist(string $relativePath, int $ownerId): bool
+    {
+        if (preg_match('#^(?:artists|(?:avatars|covers|wallpapers|cards))/(\d+)/#', $relativePath, $matches)) {
+            if ((int) $matches[1] !== $ownerId) {
+                return true;
+            }
+        }
+
+        $likeSuffix = '%/' . $relativePath . '%';
+        $artists = Artist::query()
+            ->where('id', '!=', $ownerId)
+            ->where(function ($query) use ($relativePath, $likeSuffix): void {
+                foreach (['avatar_url', 'cover_url', 'wallpaper_url'] as $column) {
+                    $query->orWhere($column, $relativePath)->orWhere($column, 'like', $likeSuffix);
+                }
+            })
+            ->get(['avatar_url', 'cover_url', 'wallpaper_url']);
+
+        foreach ($artists as $artist) {
+            foreach (['avatar_url', 'cover_url', 'wallpaper_url'] as $column) {
+                if ($this->extractRelativeStoragePath($artist->{$column}) === $relativePath) {
+                    return true;
+                }
+            }
+        }
+
+        $buttons = Button::query()
+            ->where('artist_id', '!=', $ownerId)
+            ->where(fn ($q) => $q->where('image_url', $relativePath)->orWhere('image_url', 'like', $likeSuffix))
+            ->get(['image_url']);
+
+        foreach ($buttons as $button) {
+            if ($this->extractRelativeStoragePath($button->image_url) === $relativePath) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function validateStorageOwnership(string $attribute, mixed $value, ?int $ownerId, Closure $fail): void
+    {
+        if (!is_string($value) || trim($value) === '' || !$this->isStorageUrl($value)) {
+            return;
+        }
+
+        $relativePath = $this->extractRelativeStoragePath($value);
+        if ($relativePath === null || ($ownerId !== null && $this->isStoragePathOwnedByAnotherArtist($relativePath, $ownerId))) {
+            $fail("O campo {$attribute} referencia um arquivo de mídia inválido ou pertencente a outro usuário.");
+        }
+    }
+
     private function localPathFromUrl(string $url): string
     {
         $parsed = parse_url($url, PHP_URL_PATH);
@@ -90,9 +150,6 @@ trait InteractsWithMediaStorage
         return ($parsed !== false && $parsed !== null) ? $parsed : $url;
     }
 
-    /**
-     * Remove host e container de URLs do Azure Blob Storage. Retorna null quando a URL não é do Azure.
-     */
     private function stripAzureBase(string $url): ?string
     {
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
@@ -100,7 +157,6 @@ trait InteractsWithMediaStorage
             return null;
         }
 
-        $path = (string) parse_url($url, PHP_URL_PATH);
         $configured = (string) config('filesystems.disks.azure.url', '');
         if ($configured !== '' && str_starts_with($url, rtrim($configured, '/') . '/')) {
             return substr($url, strlen(rtrim($configured, '/')) + 1);
@@ -109,7 +165,7 @@ trait InteractsWithMediaStorage
             return null;
         }
 
-        $path = ltrim($path, '/');
+        $path = ltrim((string) parse_url($url, PHP_URL_PATH), '/');
         $container = trim((string) config('filesystems.disks.azure.container', ''), '/');
         if ($container !== '' && str_starts_with($path, $container . '/')) {
             return substr($path, strlen($container) + 1);

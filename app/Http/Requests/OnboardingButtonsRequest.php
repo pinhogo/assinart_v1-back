@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\HexColor;
 use Illuminate\Foundation\Http\FormRequest;
 
 class OnboardingButtonsRequest extends FormRequest
@@ -104,44 +105,14 @@ class OnboardingButtonsRequest extends FormRequest
                 'string',
                 'in:none,hard_small,hard_large,soft,diffuse,elevated,colored',
             ],
-            'button_shadow_color' => [
-                'nullable',
-                'string',
-                'max:30',
-            ],
-            'circular_shadow_enabled' => [
-                'nullable',
-                'boolean',
-            ],
-            'circular_icon_background' => [
-                'nullable',
-                'string',
-                'max:20',
-            ],
-            'button_color' => [
-                'nullable',
-                'string',
-                'max:30',
-            ],
-            'button_text_color' => [
-                'nullable',
-                'string',
-                'max:30',
-            ],
-            'border_style' => [
-                'nullable',
-                'string',
-                'max:30',
-            ],
-            'border_color' => [
-                'nullable',
-                'string',
-                'max:30',
-            ],
-            'reset_individual_colors' => [
-                'nullable',
-                'boolean',
-            ],
+            'button_shadow_color' => ['nullable', 'string', 'max:30', new HexColor()],
+            'circular_shadow_enabled' => ['nullable', 'boolean'],
+            'circular_icon_background' => ['nullable', 'string', 'max:20', new HexColor(allowAuto: true)],
+            'button_color' => ['nullable', 'string', 'max:30', new HexColor()],
+            'button_text_color' => ['nullable', 'string', 'max:30', new HexColor()],
+            'border_style' => ['nullable', 'string', 'max:30'],
+            'border_color' => ['nullable', 'string', 'max:30', new HexColor()],
+            'reset_individual_colors' => ['nullable', 'boolean'],
         ];
     }
 
