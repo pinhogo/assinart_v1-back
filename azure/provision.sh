@@ -32,16 +32,36 @@ APP_KEY_VALUE="${APP_KEY:-base64:$(openssl rand -base64 32)}"
 echo "1. Validando sessão e assinatura ativa no Azure CLI..."
 az account show --output table
 
-echo "2. Verificando disponibilidade de região Linux SKU ${SKU} (${LOCATION} / fallback ${FALLBACK_LOCATION})..."
-AVAILABLE_LOCATIONS="$(az appservice list-locations --sku "${SKU}" --linux-workers-enabled --query "[].name" -o tsv)"
-if ! echo "${AVAILABLE_LOCATIONS}" | grep -qx "${LOCATION}"; then
-  echo "Aviso: região ${LOCATION} indisponível para ${SKU} Linux. Tentando fallback ${FALLBACK_LOCATION}..."
-  if echo "${AVAILABLE_LOCATIONS}" | grep -qx "${FALLBACK_LOCATION}"; then
-    LOCATION="${FALLBACK_LOCATION}"
-  else
-    echo "Erro: nem ${LOCATION} nem ${FALLBACK_LOCATION} disponíveis para Linux ${SKU}." >&2
+echo "2. Verificando disponibilidade e política de região Linux SKU ${SKU} (${LOCATION} / fallback ${FALLBACK_LOCATION})..."
+AVAILABLE_LOCATIONS="$(az appservice list-locations --sku "${SKU}" --linux-workers-enabled --query "[].name" -o tsv | tr '[:upper:]' '[:lower:]' | tr -d ' ')"
+POLICY_LOCATIONS="$(az policy assignment list --query "[?name=='sys.regionrestriction'].parameters.listOfAllowedLocations.value[]" -o tsv 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d ' ' || true)"
+
+location_allowed() {
+  local candidate="$1"
+  if ! echo "${AVAILABLE_LOCATIONS}" | grep -qx "${candidate}"; then
+    return 1
+  fi
+  if [ -n "${POLICY_LOCATIONS}" ] && ! echo "${POLICY_LOCATIONS}" | grep -qx "${candidate}"; then
+    return 1
+  fi
+  return 0
+}
+
+if ! location_allowed "${LOCATION}"; then
+  echo "Aviso: região ${LOCATION} indisponível ou bloqueada por política. Buscando fallback compatível..."
+  SELECTED=""
+  for candidate in "${FALLBACK_LOCATION}" chilecentral brazilsouth eastus2 northcentralus canadacentral francecentral spaincentral; do
+    if location_allowed "${candidate}"; then
+      SELECTED="${candidate}"
+      break
+    fi
+  done
+  if [ -z "${SELECTED}" ]; then
+    echo "Erro: nenhuma região compatível encontrada para Linux ${SKU}." >&2
     exit 1
   fi
+  LOCATION="${SELECTED}"
+  echo "Região selecionada automaticamente: ${LOCATION}"
 fi
 
 echo "3. Verificando quota de App Service / vCPU e disponibilidade do nome ${APP_NAME}..."
