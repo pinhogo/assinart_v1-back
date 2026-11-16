@@ -6,6 +6,8 @@
     "license": "proprietary",
     "require": {
         "php": "^8.2",
+        "ext-fileinfo": "*",
+        "ext-mbstring": "*",
         "azure-oss/storage-blob-laravel": "^2.2",
         "laravel/framework": "^11.0",
         "laravel/sanctum": "^4.0",

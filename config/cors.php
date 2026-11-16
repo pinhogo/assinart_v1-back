@@ -15,15 +15,16 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', '*'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'up', 'r/*'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_values(array_filter(array_unique(array_merge([
         'http://localhost:5173',
         'https://assin.art',
+        'https://www.assin.art',
         'http://127.0.0.1:5173',
-    ],
+    ], array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', ''))))))),
 
     'allowed_origins_patterns' => [],
 
@@ -33,6 +34,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];
