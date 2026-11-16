@@ -86,12 +86,16 @@ az appservice plan create \
   --output table
 
 echo "5. Criando Web App (${APP_NAME}) em PHP:8.3..."
-az webapp create \
-  --resource-group "${RG}" \
-  --plan "${PLAN}" \
-  --name "${APP_NAME}" \
-  --runtime "PHP:8.3" \
-  --output table
+if az webapp show --resource-group "${RG}" --name "${APP_NAME}" >/dev/null 2>&1; then
+  echo "Web App ${APP_NAME} já existe em ${RG}."
+else
+  az webapp create \
+    --resource-group "${RG}" \
+    --plan "${PLAN}" \
+    --name "${APP_NAME}" \
+    --runtime "PHP:8.3" \
+    --output none
+fi
 
 echo "6. Aplicando hardening HTTPS, Always On, TLS 1.2, FTPS desativado e instância única..."
 az webapp update \
@@ -138,14 +142,14 @@ if [ "${DB_CONNECTION}" = "pgsql" ]; then
       --storage-size "${PG_STORAGE_SIZE}" \
       --public-access 0.0.0.0 \
       --yes \
-      --output table
+      --output none
   fi
 
   az postgres flexible-server db create \
     --resource-group "${RG}" \
     --server-name "${PG_SERVER_NAME}" \
     --database-name "${PG_DATABASE}" \
-    --output table || true
+    --output none || true
 fi
 
 echo "7. Configurando App Settings de produção (${DB_CONNECTION}, sem SANCTUM_STATEFUL_DOMAINS)..."
