@@ -5,11 +5,18 @@ namespace Tests\Feature;
 use App\Models\Artist;
 use App\Models\Button;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class PublicProfileTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function tearDown(): void
+    {
+        Cache::flush();
+        parent::tearDown();
+    }
 
     /**
      * Tier 1: Perfil público com botões ativos retorna 200 OK, status 'found' e estilos resolvidos por cascade.
@@ -619,5 +626,44 @@ class PublicProfileTest extends TestCase
         $this->assertEquals('bold', $dataButtons[0]['font_weight']);
         $this->assertEquals('italic', $dataButtons[0]['font_style']);
         $this->assertEquals('yellow', $dataButtons[0]['text_border']);
+    }
+
+    /**
+     * SEC-07.4: Perfil público GET /{username} não expõe artist.id nem data.id, mantendo os ids dos botões.
+     */
+    public function test_public_profile_does_not_expose_artist_id(): void
+    {
+        $artist = Artist::factory()->create([
+            'username' => 'sem_id_publico',
+        ]);
+
+        $button = Button::factory()->create([
+            'artist_id' => $artist->id,
+            'display_mode' => 'button',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/sem_id_publico');
+
+        $response->assertStatus(200);
+        $this->assertArrayNotHasKey('id', $response->json('artist'));
+        $this->assertArrayNotHasKey('id', $response->json('data'));
+        $this->assertEquals($button->id, $response->json('button_links.0.id'));
+    }
+
+    /**
+     * SEC-07.2: Rota pública GET /{username} aplica throttle 60 req/min.
+     */
+    public function test_public_profile_rate_limiting_triggers_429(): void
+    {
+        Artist::factory()->create([
+            'username' => 'throttle_publico',
+        ]);
+
+        for ($i = 0; $i < 60; $i++) {
+            $this->getJson('/throttle_publico')->assertStatus(200);
+        }
+
+        $this->getJson('/throttle_publico')->assertStatus(429);
     }
 }
