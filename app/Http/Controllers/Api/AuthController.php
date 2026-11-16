@@ -46,11 +46,13 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
+        $emailKey = strtolower(trim((string) $request->input('email', '')));
         $ip = $request->ip() ?? '127.0.0.1';
-        $throttleKey = 'login|' . $ip;
+        $emailIpKey = 'login|' . $emailKey . '|' . $ip;
+        $ipOnlyKey = 'login|' . $ip;
 
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
+        if (RateLimiter::tooManyAttempts($emailIpKey, 5) || RateLimiter::tooManyAttempts($ipOnlyKey, 20)) {
+            $seconds = max(RateLimiter::availableIn($emailIpKey), RateLimiter::availableIn($ipOnlyKey));
             return response()->json([
                 'status' => 'error',
                 'message' => "Muitas tentativas de login. Tente novamente em {$seconds} segundos.",
@@ -58,17 +60,18 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $artist = Artist::where('email', strtolower(trim($request->input('email'))))->first();
+        $artist = Artist::where('email', $emailKey)->first();
 
         if (!$artist || !Hash::check($request->input('password'), $artist->password)) {
-            RateLimiter::hit($throttleKey, 60);
+            RateLimiter::hit($emailIpKey, 60);
+            RateLimiter::hit($ipOnlyKey, 60);
             return response()->json([
                 'status' => 'error',
                 'message' => 'Credenciais inválidas. Verifique seu e-mail e senha.',
             ], 401);
         }
 
-        RateLimiter::clear($throttleKey);
+        RateLimiter::clear($emailIpKey);
 
         return $this->respondWithArtistSession($artist, 'Login realizado com sucesso.', 200);
     }
@@ -92,8 +95,12 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
-            $user->currentAccessToken()->delete();
+        if ($user) {
+            if ($request->boolean('all') || $request->boolean('revoke_all')) {
+                $user->tokens()->delete();
+            } elseif (method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+                $user->currentAccessToken()->delete();
+            }
         }
 
         return response()->json([
