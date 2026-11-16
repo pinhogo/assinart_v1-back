@@ -75,8 +75,19 @@ jobs:
           path: ${{ runner.temp }}/assinart-back.zip
           retention-days: 30
 
+      - name: Check Azure publish profile secret
+        id: deploy_guard
+        env:
+          PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          if [ -n "${PROFILE}" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Deploy to Azure App Service
-        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE != '' }}
+        if: steps.deploy_guard.outputs.enabled == 'true'
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
