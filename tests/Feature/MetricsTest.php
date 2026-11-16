@@ -7,6 +7,8 @@ use App\Models\Button;
 use App\Models\ButtonClick;
 use App\Models\PageView;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
 class MetricsTest extends TestCase
@@ -178,5 +180,81 @@ class MetricsTest extends TestCase
                     ],
                 ],
             ]);
+    }
+
+    public function test_track_validates_fields_and_returns_422(): void
+    {
+        $this->postJson('/api/v1/track', [
+            'type' => 'invalid_event',
+        ])->assertStatus(422)->assertJsonValidationErrors(['type']);
+
+        $this->postJson('/api/v1/track', [
+            'type' => 'pageview',
+            'visitor_id' => str_repeat('a', 65),
+            'link_id' => 0,
+        ])->assertStatus(422)->assertJsonValidationErrors(['visitor_id', 'link_id']);
+    }
+
+    public function test_track_ignores_draft_artist_and_inactive_or_draft_buttons(): void
+    {
+        $draftArtist = Artist::factory()->create([
+            'username' => 'draft_artist',
+            'is_published' => false,
+        ]);
+        $draftButton = Button::factory()->create([
+            'artist_id' => $draftArtist->id,
+            'is_active' => true,
+            'clicks_count' => 0,
+        ]);
+
+        $publishedArtist = Artist::factory()->create(['is_published' => true]);
+        $inactiveButton = Button::factory()->create([
+            'artist_id' => $publishedArtist->id,
+            'is_active' => false,
+            'clicks_count' => 0,
+        ]);
+
+        $this->postJson('/api/v1/track', [
+            'type' => 'pageview',
+            'username' => 'draft_artist',
+            'visitor_id' => 'v1',
+        ])->assertStatus(204);
+
+        $this->postJson('/api/v1/track', [
+            'type' => 'click',
+            'link_id' => $draftButton->id,
+            'visitor_id' => 'v1',
+        ])->assertStatus(204);
+
+        $this->postJson('/api/v1/track', [
+            'type' => 'click',
+            'link_id' => $inactiveButton->id,
+            'visitor_id' => 'v1',
+        ])->assertStatus(204);
+
+        $this->assertDatabaseCount('page_views', 0);
+        $this->assertDatabaseCount('button_clicks', 0);
+        $this->assertSame(0, $draftButton->fresh()->clicks_count);
+        $this->assertSame(0, $inactiveButton->fresh()->clicks_count);
+    }
+
+    public function test_track_enforces_throttle_120_per_minute(): void
+    {
+        try {
+            for ($i = 0; $i < 120; $i++) {
+                $this->postJson('/api/v1/track', [
+                    'type' => 'pageview',
+                    'username' => 'missing',
+                ])->assertStatus(204);
+            }
+
+            $this->postJson('/api/v1/track', [
+                'type' => 'pageview',
+                'username' => 'missing',
+            ])->assertStatus(429);
+        } finally {
+            RateLimiter::clear('127.0.0.1');
+            Cache::flush();
+        }
     }
 }

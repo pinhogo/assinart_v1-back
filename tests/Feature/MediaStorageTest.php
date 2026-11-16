@@ -6,6 +6,8 @@ use App\Models\Artist;
 use App\Models\Button;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -386,5 +388,86 @@ class MediaStorageTest extends TestCase
         $this->actingAs($artist, 'sanctum')
             ->putJson('/api/v1/profile', ['wallpaper_url' => self::AZURE_BASE . 'wallpapers/w.png'])
             ->assertStatus(200);
+    }
+
+    public function test_storage_idor_protection_blocks_referencing_or_deleting_other_artists_media(): void
+    {
+        Storage::disk('public')->put('avatars/victim_avatar.png', 'victim');
+        Storage::disk('public')->put('cards/victim_card.png', 'victim');
+
+        $victim = Artist::factory()->create([
+            'avatar_url' => '/storage/avatars/victim_avatar.png',
+            'wallpaper_url' => self::AZURE_BASE . 'wallpapers/victim_wall.png',
+        ]);
+        Button::factory()->create([
+            'artist_id' => $victim->id,
+            'image_url' => '/storage/cards/victim_card.png',
+        ]);
+
+        $attacker = Artist::factory()->create([
+            'avatar_url' => '/storage/avatars/victim_avatar.png',
+        ]);
+        $attackerButton = Button::factory()->create([
+            'artist_id' => $attacker->id,
+            'image_url' => '/storage/cards/victim_card.png',
+        ]);
+
+        // Requests reject referencing another artist's storage path (422)
+        $this->actingAs($attacker, 'sanctum')
+            ->putJson('/api/v1/profile', ['avatar_url' => '/storage/avatars/victim_avatar.png'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['avatar_url']);
+
+        $this->actingAs($attacker, 'sanctum')
+            ->putJson('/api/v1/profile', ['wallpaper_url' => self::AZURE_BASE . 'wallpapers/victim_wall.png'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['wallpaper_url']);
+
+        $this->actingAs($attacker, 'sanctum')
+            ->postJson('/api/v1/buttons', [
+                'title' => 'IDOR Card',
+                'url' => 'https://example.com',
+                'image_url' => '/storage/cards/victim_card.png',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['image_url']);
+
+        $this->actingAs($attacker, 'sanctum')
+            ->putJson("/api/v1/buttons/{$attackerButton->id}", [
+                'image_url' => '/storage/cards/victim_card.png',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['image_url']);
+
+        // Deleting attacker's avatar or button must NOT delete victim's files from disk
+        $this->actingAs($attacker, 'sanctum')->deleteJson('/api/v1/profile/avatar')->assertStatus(200);
+        $this->actingAs($attacker, 'sanctum')->deleteJson("/api/v1/buttons/{$attackerButton->id}")->assertStatus(200);
+
+        Storage::disk('public')->assertExists('avatars/victim_avatar.png');
+        Storage::disk('public')->assertExists('cards/victim_card.png');
+    }
+
+    public function test_profile_upload_endpoints_enforce_throttle_20_per_minute(): void
+    {
+        $artist = Artist::factory()->create();
+
+        try {
+            for ($i = 0; $i < 20; $i++) {
+                $this->actingAs($artist, 'sanctum')
+                    ->postJson('/api/v1/profile/avatar', [
+                        'avatar' => UploadedFile::fake()->create("a{$i}.png", 50, 'image/png'),
+                    ])
+                    ->assertStatus(200);
+            }
+
+            $this->actingAs($artist, 'sanctum')
+                ->postJson('/api/v1/profile/avatar', [
+                    'avatar' => UploadedFile::fake()->create('a21.png', 50, 'image/png'),
+                ])
+                ->assertStatus(429);
+        } finally {
+            RateLimiter::clear((string) $artist->id);
+            Cache::flush();
+        }
     }
 }
