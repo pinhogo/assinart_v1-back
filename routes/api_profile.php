@@ -24,12 +24,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
-    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar'])->middleware('throttle:20,1');
     Route::delete('/profile/avatar', [ProfileController::class, 'deleteAvatar']);
-    Route::post('/profile/cover', [ProfileController::class, 'uploadCover']);
+    Route::post('/profile/cover', [ProfileController::class, 'uploadCover'])->middleware('throttle:20,1');
     Route::delete('/profile/cover', [ProfileController::class, 'deleteCover']);
-    Route::post('/profile/background', [ProfileController::class, 'uploadBackground']);
+    Route::post('/profile/background', [ProfileController::class, 'uploadBackground'])->middleware('throttle:20,1');
     Route::delete('/profile/background', [ProfileController::class, 'deleteBackground']);
-    Route::post('/profile/wallpaper', [ProfileController::class, 'uploadBackground']);
+    Route::post('/profile/wallpaper', [ProfileController::class, 'uploadBackground'])->middleware('throttle:20,1');
     Route::delete('/profile/wallpaper', [ProfileController::class, 'deleteBackground']);
 });

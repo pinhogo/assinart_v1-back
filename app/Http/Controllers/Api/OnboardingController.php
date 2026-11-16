@@ -2,190 +2,50 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\InteractsWithMediaStorage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OnboardingBackgroundRequest;
 use App\Http\Requests\OnboardingButtonsRequest;
 use App\Http\Requests\OnboardingLinksRequest;
 use App\Services\ButtonOrderService;
+use App\Support\OnboardingPlatformUrlFormatter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class OnboardingController extends Controller
 {
-    /**
-     * 17 Neo-Brutalist background palette presets (Figma & Frontend design tokens).
-     */
-    public const PALETTE_PRESETS = [
-        'paper' => '#F7F6F2',
-        'linen' => '#EFECE6',
-        'butter' => '#F3E7B8',
-        'peach' => '#F6D5BC',
-        'clay' => '#E9C5B5',
-        'rose' => '#E8D5D7',
-        'lavender' => '#DAD3EC',
-        'snow' => '#D5E0EA',
-        'sky' => '#A8CCE4',
-        'sage' => '#C9D9D0',
-        'celadon' => '#ACE1AF',
-        'olive' => '#A9AE86',
-        'terracotta' => '#E15B3A',
-        'wine' => '#6B2D3C',
-        'forest' => '#2F4A3C',
-        'navy' => '#1F2B47',
-        'noir' => '#121316',
-    ];
+    use InteractsWithMediaStorage;
 
-    /**
-     * Default human-readable labels for the 17 supported networks + custom.
-     */
-    public const PLATFORM_TITLES = [
-        'website' => 'Website',
-        'youtube' => 'YouTube',
-        'x' => 'X',
-        'linkedin' => 'LinkedIn',
-        'soundcloud' => 'SoundCloud',
-        'instagram' => 'Instagram',
-        'spotify' => 'Spotify',
-        'threads' => 'Threads',
-        'pinterest' => 'Pinterest',
-        'discord' => 'Discord',
-        'whatsapp' => 'WhatsApp',
-        'tiktok' => 'TikTok',
-        'facebook' => 'Facebook',
-        'behance' => 'Behance',
-        'telegram' => 'Telegram',
-        'twitch' => 'Twitch',
-        'email' => 'E-mail',
-        'custom' => 'Link Personalizado',
-    ];
+    public const PALETTE_PRESETS = OnboardingPlatformUrlFormatter::PALETTE_PRESETS;
 
-    /**
-     * Etapa 1: Salva a bio e sincroniza até 30 links combinados entre redes sociais e personalizados.
-     * Endpoint: PUT /api/v1/onboarding/links
-     */
+    public const PLATFORM_TITLES = OnboardingPlatformUrlFormatter::PLATFORM_TITLES;
+
     public function saveLinks(OnboardingLinksRequest $request, ButtonOrderService $orderService): JsonResponse
     {
         $artist = $request->user();
-
-        // 1. Extrai e normaliza a lista de links (suporta payload padrão e formato draft do frontend)
         $rawLinks = $request->input('links');
-
-        if ($rawLinks === null && ($request->has('selectedPlatforms') || $request->has('linkValues'))) {
-            $selected = $request->input('selectedPlatforms', []);
-            $values = $request->input('linkValues', []);
-            $rawLinks = [];
-
-            if (is_array($selected)) {
-                foreach ($selected as $platform) {
-                    $val = is_array($values) ? ($values[$platform] ?? '') : '';
-                    $rawLinks[] = [
-                        'platform' => (string) $platform,
-                        'value' => (string) $val,
-                    ];
-                }
-            }
-        }
-
         $rawLinks = is_array($rawLinks) ? $rawLinks : [];
 
-        // 2. Processa até 30 links válidos
-        $parsedButtons = [];
-        $count = 0;
-        $circularCount = 0;
-
-        foreach ($rawLinks as $item) {
-            if ($count >= ButtonOrderService::MAX_BUTTONS_PER_ARTIST) {
-                break;
-            }
-
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $platform = (string) ($item['platform'] ?? 'custom');
-            if (!array_key_exists($platform, self::PLATFORM_TITLES)) {
-                $platform = 'custom';
-            }
-
-            $rawInput = trim((string) ($item['url'] ?? $item['value'] ?? ''));
-            $isActive = array_key_exists('is_active', $item) ? (bool) $item['is_active'] : true;
-            $formattedUrl = $this->formatPlatformUrl($platform, $rawInput);
-            if ($formattedUrl === '' && !$isActive) {
-                $formattedUrl = 'https://assin.art';
-            }
-
-            $title = !empty($item['title'])
-                ? trim((string) $item['title'])
-                : (self::PLATFORM_TITLES[$platform] ?? ucfirst($platform));
-
-            $displayMode = (isset($item['display_mode']) && in_array($item['display_mode'], ['button', 'circular'], true))
-                ? $item['display_mode']
-                : 'button';
-
-            $iconVariant = (isset($item['icon_variant']) && in_array($item['icon_variant'], ['default', 'black', 'white', 'none'], true))
-                ? $item['icon_variant']
-                : 'default';
-
-            $showBackground = array_key_exists('show_icon_background', $item) && $item['show_icon_background'] !== null
-                ? (bool) $item['show_icon_background']
-                : ($displayMode === 'circular');
-
-            $normalizedDisplay = $orderService->normalizeDisplayAttributes(
-                $displayMode,
-                $iconVariant,
-                $showBackground,
-            );
-
-            if ($normalizedDisplay['display_mode'] === 'circular') {
-                $circularCount++;
-            }
-
-            $textAlign = (isset($item['text_align']) && in_array($item['text_align'], ['left', 'center', 'right'], true))
-                ? $item['text_align']
-                : 'left';
-
-            $parsedButtons[] = [
-                'title' => $title,
-                'url' => $formattedUrl,
-                'platform' => $platform,
-                'display_mode' => $normalizedDisplay['display_mode'],
-                'icon_variant' => $normalizedDisplay['icon_variant'],
-                'show_icon_background' => $normalizedDisplay['show_icon_background'],
-                'text_align' => $textAlign,
-                'button_color' => isset($item['button_color']) && trim((string) $item['button_color']) !== '' ? trim((string) $item['button_color']) : null,
-                'text_color' => isset($item['text_color']) && trim((string) $item['text_color']) !== '' ? trim((string) $item['text_color']) : null,
-                'font_family' => isset($item['font_family']) && trim((string) $item['font_family']) !== '' ? trim((string) $item['font_family']) : null,
-                'font_weight' => (isset($item['font_weight']) && in_array($item['font_weight'], ['normal', 'bold'], true)) ? $item['font_weight'] : null,
-                'font_style' => (isset($item['font_style']) && in_array($item['font_style'], ['normal', 'italic'], true)) ? $item['font_style'] : null,
-                'text_border' => (isset($item['text_border']) && in_array($item['text_border'], ['none', 'black', 'white', 'yellow'], true)) ? $item['text_border'] : null,
-                'type' => 'standard',
-                'order_index' => $count,
-                'clicks_count' => 0,
-                'is_active' => $isActive,
-            ];
-
-            $count++;
-        }
+        [$parsedButtons, $circularCount] = OnboardingPlatformUrlFormatter::parseLinks($rawLinks, $orderService);
 
         if ($circularCount > ButtonOrderService::MAX_CIRCULAR_BUTTONS) {
             return response()->json([
                 'message' => 'Você pode ter no máximo 5 botões circulares.',
-                'errors' => [
-                    'links' => ['Você pode ter no máximo 5 botões circulares.'],
-                ],
+                'errors' => ['links' => ['Você pode ter no máximo 5 botões circulares.']],
             ], 422);
         }
 
-        // 3. Normaliza sequência: circular (0..K-1) seguido de button (K..M-1) preservando ordem relativa
         $parsedButtons = $orderService->sortAndIndexParsedButtons($parsedButtons);
 
-        // 4. Sincroniza bio e botões atomicamente no banco de dados
         $createdButtons = DB::transaction(function () use ($artist, $request, $parsedButtons) {
             if ($request->has('bio')) {
                 $artist->bio = $request->input('bio');
                 $artist->save();
             }
 
+            foreach ($artist->buttons()->get(['id', 'image_url']) as $btn) {
+                $this->deleteFileFromStorage($btn->image_url, $artist->id);
+            }
             $artist->buttons()->delete();
 
             $results = [];
@@ -211,29 +71,20 @@ class OnboardingController extends Controller
         ], 200);
     }
 
-    /**
-     * Etapa 2: Personalização do plano de fundo (cor e padrão/textura).
-     * Endpoint: PUT /api/v1/onboarding/background
-     */
     public function saveBackground(OnboardingBackgroundRequest $request): JsonResponse
     {
         $artist = $request->user();
-
         $backgroundId = $request->input('background_id');
         $backgroundColor = $request->input('background_color');
 
-        // Se a cor não foi passada explicitamente, mapeia pelo preset selecionado
         if (empty($backgroundColor) && !empty($backgroundId) && isset(self::PALETTE_PRESETS[$backgroundId])) {
             $backgroundColor = self::PALETTE_PRESETS[$backgroundId];
         }
 
-        $updateData = [];
-        if (!empty($backgroundColor)) {
-            $updateData['background_color'] = $backgroundColor;
-        }
-        if ($backgroundId !== null) {
-            $updateData['background_id'] = $backgroundId;
-        }
+        $updateData = array_filter([
+            'background_color' => !empty($backgroundColor) ? $backgroundColor : null,
+            'background_id' => $backgroundId,
+        ], fn ($v) => $v !== null);
 
         if (!empty($updateData)) {
             $artist->update($updateData);
@@ -251,46 +102,21 @@ class OnboardingController extends Controller
         ], 200);
     }
 
-    /**
-     * Etapa 3: Personalização dos botões, estilo de sombra, ícones circulares e cores.
-     * Endpoint: PUT /api/v1/onboarding/buttons
-     */
     public function saveButtons(OnboardingButtonsRequest $request): JsonResponse
     {
         $artist = $request->user();
-
         $fillableUpdates = [];
 
-        if ($request->has('button_shape')) {
-            $fillableUpdates['button_shape'] = $request->input('button_shape');
-        }
-        if ($request->has('button_shadow')) {
-            $fillableUpdates['button_shadow'] = $request->input('button_shadow');
+        foreach (['button_shape', 'button_shadow', 'circular_icon_background', 'button_color', 'button_text_color', 'border_style', 'border_color'] as $field) {
+            if ($request->has($field)) {
+                $fillableUpdates[$field] = $request->input($field);
+            }
         }
         if ($request->has('button_shadow_color') && $request->input('button_shadow_color') !== null) {
             $fillableUpdates['button_shadow_color'] = $request->input('button_shadow_color');
         }
         if ($request->has('circular_shadow_enabled') && $request->input('circular_shadow_enabled') !== null) {
             $fillableUpdates['circular_shadow_enabled'] = $request->boolean('circular_shadow_enabled');
-        }
-        if ($request->has('circular_icon_background')) {
-            $fillableUpdates['circular_icon_background'] = $request->input('circular_icon_background');
-        }
-        if ($request->has('button_color')) {
-            $fillableUpdates['button_color'] = $request->input('button_color');
-        }
-        if ($request->has('button_text_color')) {
-            $fillableUpdates['button_text_color'] = $request->input('button_text_color');
-        }
-        if ($request->has('border_style')) {
-            $fillableUpdates['border_style'] = $request->input('border_style');
-        }
-        if ($request->has('border_color')) {
-            $fillableUpdates['border_color'] = $request->input('border_color');
-        }
-
-        if ($artist->email_verified_at === null) {
-            $fillableUpdates['email_verified_at'] = now();
         }
 
         if (!empty($fillableUpdates)) {
@@ -321,163 +147,8 @@ class OnboardingController extends Controller
         ], 200);
     }
 
-    /**
-     * Formata e sanitiza URL de acordo com a plataforma social.
-     */
     protected function formatPlatformUrl(string $platform, string $input): string
     {
-        $input = trim($input);
-
-        if (empty($input)) {
-            return '';
-        }
-
-        switch ($platform) {
-            case 'website':
-            case 'custom':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                return 'https://' . ltrim($input, '/');
-
-            case 'email':
-                if (str_starts_with(strtolower($input), 'mailto:')) {
-                    return $input;
-                }
-                return 'mailto:' . $input;
-
-            case 'whatsapp':
-                $digits = preg_replace('/\D/', '', $input);
-                if (empty($digits)) {
-                    return $input;
-                }
-                if (str_starts_with($digits, '55') && strlen($digits) > 11) {
-                    return 'https://wa.me/' . $digits;
-                }
-                if (strlen($digits) === 10 || strlen($digits) === 11) {
-                    return 'https://wa.me/55' . $digits;
-                }
-                return 'https://wa.me/' . $digits;
-
-            case 'instagram':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?instagram\.com/#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://instagram.com/' . $clean;
-
-            case 'tiktok':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?tiktok\.com/@?#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://tiktok.com/@' . $clean;
-
-            case 'youtube':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?youtube\.com/(@|c/|channel/|user/)?#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://youtube.com/@' . $clean;
-
-            case 'x':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?(x\.com|twitter\.com)/#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://x.com/' . $clean;
-
-            case 'linkedin':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?linkedin\.com/(in/)?#i', '', $input);
-                $clean = preg_replace('#^in/#i', '', $clean);
-                $clean = trim($clean, '/');
-                return 'https://linkedin.com/in/' . $clean;
-
-            case 'spotify':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(open\.)?spotify\.com/(artist/)?#i', '', $input);
-                $clean = preg_replace('#^artist/#i', '', $clean);
-                $clean = trim($clean, '/');
-                return 'https://open.spotify.com/artist/' . $clean;
-
-            case 'threads':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?threads\.net/@?#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://threads.net/@' . $clean;
-
-            case 'pinterest':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?pinterest\.com/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://pinterest.com/' . $clean;
-
-            case 'discord':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?(discord\.gg|discord\.com/invite)/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://discord.gg/' . $clean;
-
-            case 'facebook':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?facebook\.com/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://facebook.com/' . $clean;
-
-            case 'behance':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?behance\.net/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://behance.net/' . $clean;
-
-            case 'telegram':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?(t\.me|telegram\.me)/#i', '', $input);
-                $clean = ltrim(trim($clean, '/'), '@');
-                return 'https://t.me/' . $clean;
-
-            case 'twitch':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?twitch\.tv/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://twitch.tv/' . $clean;
-
-            case 'soundcloud':
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                $clean = preg_replace('#^(https?://)?(www\.)?soundcloud\.com/#i', '', $input);
-                $clean = trim($clean, '/');
-                return 'https://soundcloud.com/' . $clean;
-
-            default:
-                if (preg_match('#^https?://#i', $input)) {
-                    return $input;
-                }
-                return 'https://' . ltrim($input, '/');
-        }
+        return OnboardingPlatformUrlFormatter::formatPlatformUrl($platform, $input);
     }
 }

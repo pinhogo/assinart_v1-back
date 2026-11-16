@@ -18,8 +18,7 @@ class ButtonController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $artist = $request->user();
-        $buttons = $artist->buttons()->orderBy('order_index', 'asc')->get();
+        $buttons = $request->user()->buttons()->orderBy('order_index', 'asc')->get();
 
         return response()->json([
             'status' => 'success',
@@ -33,63 +32,30 @@ class ButtonController extends Controller
         $validated = $request->validated();
 
         return DB::transaction(function () use ($artist, $validated, $orderService) {
-            $artistButtons = $artist->buttons()
-                ->orderBy('order_index', 'asc')
-                ->orderBy('id', 'asc')
-                ->lockForUpdate()
-                ->get();
+            $artistButtons = $artist->buttons()->orderBy('order_index', 'asc')->orderBy('id', 'asc')->lockForUpdate()->get();
 
             if ($artistButtons->count() >= ButtonOrderService::MAX_BUTTONS_PER_ARTIST) {
-                return response()->json([
-                    'message' => 'Limite de 30 links atingido.',
-                    'errors' => [
-                        'links' => ['Você pode cadastrar no máximo 30 links combinados entre redes sociais e personalizados.'],
-                    ],
-                ], 422);
+                return $this->limitErrorResponse(
+                    'Limite de 30 links atingido.',
+                    'links',
+                    'Você pode cadastrar no máximo 30 links combinados entre redes sociais e personalizados.',
+                );
             }
 
             $displayMode = $validated['display_mode'] ?? 'button';
-
-            if (
-                $displayMode === 'circular'
-                && $artistButtons->where('display_mode', 'circular')->count() >= ButtonOrderService::MAX_CIRCULAR_BUTTONS
-            ) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Você pode ter no máximo 5 botões circulares.',
-                    'errors' => [
-                        'display_mode' => ['Você pode ter no máximo 5 botões circulares.'],
-                    ],
-                ], 422);
+            if ($displayMode === 'circular' && $artistButtons->where('display_mode', 'circular')->count() >= ButtonOrderService::MAX_CIRCULAR_BUTTONS) {
+                return $this->limitErrorResponse(
+                    'Você pode ter no máximo 5 botões circulares.',
+                    'display_mode',
+                    'Você pode ter no máximo 5 botões circulares.',
+                );
             }
 
-            $validated['platform'] = $validated['platform'] ?? 'custom';
-            if ($validated['platform'] === 'email' && array_key_exists('url', $validated)) {
-                $validated['url'] = $this->normalizeEmailUrl((string) $validated['url']);
-            }
-            $validated['type'] = $validated['type'] ?? 'standard';
-            $validated['is_active'] = $validated['is_active'] ?? true;
-            $validated['text_align'] = $validated['text_align'] ?? 'left';
-
-            $iconVariant = $validated['icon_variant'] ?? 'default';
-            $showBackground = array_key_exists('show_icon_background', $validated) && $validated['show_icon_background'] !== null
-                ? (bool) $validated['show_icon_background']
-                : ($displayMode === 'circular');
-
-            $displayAttributes = $orderService->normalizeDisplayAttributes(
-                $displayMode,
-                $iconVariant,
-                $showBackground,
-            );
-
-            $validated = array_merge($validated, $displayAttributes);
-            $validated['order_index'] = $artistButtons->count();
-
-            $button = $artist->buttons()->create($validated);
+            $payload = $this->prepareStorePayload($validated, $artistButtons->count(), $orderService);
+            $button = $artist->buttons()->create($payload);
 
             $artistButtons->push($button);
-            $plan = $orderService->normalizeArtistButtons($artistButtons);
-            $orderService->applyNormalizedPlan($plan);
+            $orderService->applyNormalizedPlan($orderService->normalizeArtistButtons($artistButtons));
 
             return response()->json([
                 'status' => 'success',
@@ -106,19 +72,10 @@ class ButtonController extends Controller
         unset($validated['order_index']);
 
         return DB::transaction(function () use ($artist, $id, $validated, $orderService) {
-            $artistButtons = $artist->buttons()
-                ->orderBy('order_index', 'asc')
-                ->orderBy('id', 'asc')
-                ->lockForUpdate()
-                ->get();
+            $artistButtons = $artist->buttons()->orderBy('order_index', 'asc')->orderBy('id', 'asc')->lockForUpdate()->get();
 
             /** @var Button $button */
             $button = $artistButtons->firstWhere('id', $id) ?? $artist->buttons()->findOrFail($id);
-
-            $targetPlatform = $validated['platform'] ?? $button->platform;
-            if ($targetPlatform === 'email' && array_key_exists('url', $validated)) {
-                $validated['url'] = $this->normalizeEmailUrl((string) $validated['url']);
-            }
 
             if (array_key_exists('display_mode', $validated) && $validated['display_mode'] === null) {
                 unset($validated['display_mode']);
@@ -129,33 +86,20 @@ class ButtonController extends Controller
             $displayModeChanged = $targetDisplayMode !== $previousDisplayMode;
 
             if ($displayModeChanged && $targetDisplayMode === 'circular') {
-                $otherCircularCount = $artistButtons
-                    ->where('id', '!=', $button->id)
-                    ->where('display_mode', 'circular')
-                    ->count();
-
+                $otherCircularCount = $artistButtons->where('id', '!=', $button->id)->where('display_mode', 'circular')->count();
                 if ($otherCircularCount >= ButtonOrderService::MAX_CIRCULAR_BUTTONS) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'Você pode ter no máximo 5 botões circulares.',
-                        'errors' => [
-                            'display_mode' => ['Você pode ter no máximo 5 botões circulares.'],
-                        ],
-                    ], 422);
+                    return $this->limitErrorResponse(
+                        'Você pode ter no máximo 5 botões circulares.',
+                        'display_mode',
+                        'Você pode ter no máximo 5 botões circulares.',
+                    );
                 }
             }
 
-            if ($targetDisplayMode === 'circular') {
-                $currentIcon = $validated['icon_variant'] ?? $button->icon_variant;
-                $normalizedDisplay = $orderService->normalizeDisplayAttributes('circular', $currentIcon, true);
-                $validated = array_merge($validated, $normalizedDisplay);
-            }
-
-            $button->update($validated);
+            $button->update($this->prepareUpdatePayload($button, $validated, $targetDisplayMode, $orderService));
 
             if ($displayModeChanged) {
-                $plan = $orderService->normalizeArtistButtons($artistButtons);
-                $orderService->applyNormalizedPlan($plan);
+                $orderService->applyNormalizedPlan($orderService->normalizeArtistButtons($artistButtons));
             }
 
             return response()->json([
@@ -170,9 +114,7 @@ class ButtonController extends Controller
     {
         $artist = $request->user();
         $button = $artist->buttons()->findOrFail($id);
-
-        $this->deleteFileFromStorage($button->image_url);
-
+        $this->deleteFileFromStorage($button->image_url, $artist->id);
         $button->delete();
 
         return response()->json([
@@ -184,23 +126,14 @@ class ButtonController extends Controller
     public function destroyAll(Request $request): JsonResponse
     {
         $artist = $request->user();
-
         foreach ($artist->buttons as $button) {
-            $this->deleteFileFromStorage($button->image_url);
+            $this->deleteFileFromStorage($button->image_url, $artist->id);
         }
-
         $artist->buttons()->delete();
 
         return response()->json([
             'status' => 'success',
             'message' => 'Todos os botões foram excluídos com sucesso.',
         ], 200);
-    }
-
-    private function normalizeEmailUrl(string $url): string
-    {
-        $cleanEmail = trim((string) preg_replace('/^mailto:/i', '', trim($url)));
-
-        return 'mailto:' . $cleanEmail;
     }
 }

@@ -2,29 +2,28 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Controllers\Api\Concerns\InteractsWithMediaStorage;
 use App\Rules\ArtistUsername;
+use App\Rules\HexColor;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateProfileRequest extends FormRequest
 {
+    use InteractsWithMediaStorage;
+
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Normalize username and shadow inputs before running validation.
-     */
     protected function prepareForValidation(): void
     {
         $merge = [];
-
         if ($this->has('username')) {
             $merge['username'] = ArtistUsername::normalize($this->input('username'));
         }
-
         $this->normalizeAliasedInput($merge, 'button_shadow_color', ['button_shadow_color', 'buttonShadowColor', 'shadowColor'], fn ($v) => is_string($v) ? trim($v) : $v);
         $this->normalizeAliasedInput($merge, 'circular_shadow_enabled', ['circular_shadow_enabled', 'circularShadowEnabled'], fn ($v) => filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $v);
 
@@ -47,35 +46,35 @@ class UpdateProfileRequest extends FormRequest
             'bio' => 'nullable|string|max:500',
             'avatar_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
             'cover_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
-            'background_color' => 'nullable|string|max:20',
+            'background_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'background_id' => 'nullable|string|max:50',
             'wallpaper_url' => ['nullable', 'string', 'max:4096', $mediaUrlRule],
             'wallpaper_repeat' => 'nullable|boolean',
             'wallpaper_preset_id' => 'nullable|string|max:50',
-            'cover_color' => 'nullable|string|max:20',
+            'cover_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'button_shape' => 'nullable|in:square,rounded,pill',
             'button_shadow' => 'nullable|string|max:30',
-            'button_shadow_color' => 'nullable|string|max:30',
+            'button_shadow_color' => ['nullable', 'string', 'max:30', new HexColor()],
             'circular_shadow_enabled' => 'nullable|boolean',
-            'circular_icon_background' => 'nullable|string|max:20',
+            'circular_icon_background' => ['nullable', 'string', 'max:20', new HexColor(allowAuto: true)],
             'avatar_shape' => 'nullable|in:circle,square,rounded',
             'font_family' => 'nullable|string|max:50',
-            'font_color' => 'nullable|string|max:20',
+            'font_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'profile_font_family' => 'nullable|string|max:50',
             'profile_font_size' => 'nullable|in:sm,md,lg',
-            'profile_text_color' => 'nullable|string|max:20',
+            'profile_text_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'profile_font_weight' => 'nullable|in:normal,bold',
             'profile_font_style' => 'nullable|in:normal,italic',
             'profile_text_border' => 'nullable|in:none,black,white,yellow',
             'button_font_family' => 'nullable|string|max:50',
             'button_font_size' => 'nullable|in:sm,md,lg',
-            'button_color' => 'nullable|string|max:20',
-            'button_text_color' => 'nullable|string|max:20',
+            'button_color' => ['nullable', 'string', 'max:20', new HexColor()],
+            'button_text_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'button_font_weight' => 'nullable|in:normal,bold',
             'button_font_style' => 'nullable|in:normal,italic',
             'button_text_border' => 'nullable|in:none,black,white,yellow',
             'border_style' => 'nullable|string|max:30',
-            'border_color' => 'nullable|string|max:20',
+            'border_color' => ['nullable', 'string', 'max:20', new HexColor()],
             'icon_variant' => 'nullable|string|max:30',
             'is_published' => 'sometimes|boolean',
             'publication_status' => 'sometimes|in:draft,published',
@@ -102,6 +101,7 @@ class UpdateProfileRequest extends FormRequest
             } elseif (!$this->has($target)) {
                 $merge[$target] = null;
             }
+
             return;
         }
     }
@@ -121,15 +121,35 @@ class UpdateProfileRequest extends FormRequest
             return;
         }
         if (preg_match('#^https?://#i', $trimmed) || str_starts_with($trimmed, '/storage/')) {
+            $this->validateStorageOwnership($attribute, $trimmed, $this->user()?->id, $fail);
             return;
         }
         if (preg_match('#^data:image/(svg\+xml|png|jpeg|jpg|webp)(;(?:charset=[^;,]+|utf8))?(;base64)?,#i', $trimmed)) {
-            $decoded = rawurldecode($trimmed);
-            if (preg_match('#(<script|javascript:|vbscript:|\bon[a-z]+\s*=)#i', $decoded)) {
-                $fail("O campo {$attribute} contém conteúdo SVG/data inseguro.");
-            }
+            $this->validateDataImagePayload($attribute, $trimmed, $fail);
             return;
         }
         $fail("O campo {$attribute} deve usar http(s), /storage/ ou imagem data:image válida.");
+    }
+
+    private function validateDataImagePayload(string $attribute, string $dataUri, Closure $fail): void
+    {
+        [$meta, $payload] = explode(',', $dataUri, 2);
+        if (stripos($meta, ';base64') !== false) {
+            $decoded = base64_decode((string) preg_replace('/\s+/', '', $payload), true);
+            if ($decoded === false) {
+                $fail("O campo {$attribute} contém base64 inválido.");
+                return;
+            }
+        } else {
+            $decoded = rawurldecode($payload);
+        }
+
+        $entityDecoded = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $compact = (string) preg_replace('/[\x00-\x1F\x7F]+/', '', $entityDecoded);
+        $pattern = '#(<script|<foreignObject|<animate|javascript:|vbscript:|\bon[a-z]+\s*=)#i';
+
+        if (preg_match($pattern, $decoded) || preg_match($pattern, $entityDecoded) || preg_match($pattern, $compact)) {
+            $fail("O campo {$attribute} contém conteúdo SVG/data inseguro.");
+        }
     }
 }

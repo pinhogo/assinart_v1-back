@@ -14,7 +14,6 @@ class Button extends Model
     protected $table = 'buttons';
 
     protected $fillable = [
-        'artist_id',
         'title',
         'url',
         'platform',
@@ -31,7 +30,6 @@ class Button extends Model
         'text_align',
         'image_url',
         'order_index',
-        'clicks_count',
         'is_active',
     ];
 
