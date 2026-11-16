@@ -242,80 +242,80 @@
 
 ---
 
-## Fase 9: Deploy no Azure App Service (`BACKLOG - FLUXO B`)
+## Fase 9: Deploy no Azure App Service (`DONE` — Infraestrutura, Hardening, Scripts, CI e Testes Validados)
 
 > Fonte: `context/DEPLOY_PLAN.md` e revisão de furos. Esta fase usa SQLite em `/home/data` apenas no MVP. As Tasks 8.1 e 8.2 substituem SQLite e disco local após o MVP.
 > Execute a Task 9.1 antes das demais. Rode os testes em PHP 8.3 real, não no PHP do Termux (o polyfill de `finfo` mascara a validação de MIME).
 
-- [ ] **Task 9.1 (`API-14`): Proxy Reverso, CORS e Hardening**
-  - **Arquivos:** `bootstrap/app.php`, `config/cors.php`, `.env.example`, `tests/Feature/CorsTest.php`
+- [x] **Task 9.1 (`API-14`): Proxy Reverso, CORS e Hardening**
+  - **Arquivos:** `bootstrap/app.php`, `config/cors.php`, `.env.example`, `tests/Feature/CorsSecurityTest.php`
   - **Escopo:**
     - [x] Adicione `$middleware->trustProxies(at: '*')` em `bootstrap/app.php` *(concluído em `API-12` / `5635c9c`)*.
-    - [ ] Adicione `https://www.assin.art` e `CORS_ALLOWED_ORIGINS` em `config/cors.php`.
-    - [ ] Limite `paths` de CORS a `api/*` e às rotas públicas necessárias. Remova o `'*'`.
-    - [ ] Defina `supports_credentials` como `false`. A autenticação usa Bearer Token.
-    - [ ] Remova `SANCTUM_STATEFUL_DOMAINS` do plano. `statefulApi()` está desativado.
-    - [ ] Cubra o preflight `OPTIONS` e o IP real via `X-Forwarded-For` em testes Feature.
-    - [ ] Verifique que `/storage/*` não colide com `GET /{username}`.
+    - [x] Adicione `https://www.assin.art` e `CORS_ALLOWED_ORIGINS` em `config/cors.php`.
+    - [x] Limite `paths` de CORS a `api/*` e às rotas públicas necessárias. Remova o `'*'`.
+    - [x] Defina `supports_credentials` como `false`. A autenticação usa Bearer Token.
+    - [x] Remova `SANCTUM_STATEFUL_DOMAINS` do plano. `statefulApi()` está desativado.
+    - [x] Cubra o preflight `OPTIONS` e o IP real via `X-Forwarded-For` em testes Feature.
+    - [x] Verifique que `/storage/*` não colide com `GET /{username}`.
   - **Critério de aceite:** O preflight de `https://assin.art` retorna `204` com `Access-Control-Allow-Origin`. O `RateLimiter` usa o IP do cliente.
 
-- [ ] **Task 9.2 (`API-15`): Arquivos de Runtime do Azure (`azure/`)**
+- [x] **Task 9.2 (`API-15`): Arquivos de Runtime do Azure (`azure/`)**
   - **Arquivos:** `azure/nginx.conf`, `azure/startup.sh`, `public/.user.ini`, `.gitattributes`
   - **Escopo:**
-    - [ ] Crie `azure/nginx.conf` com `root` em `public`, `client_max_body_size 16M` e `try_files`.
-    - [ ] Bloqueie arquivos ocultos e a execução de `.php` em `/storage/`.
-    - [ ] Crie `public/.user.ini` com `upload_max_filesize=12M` e `post_max_size=16M`. Confirme que o `PHP_INI_SCAN_DIR` do runtime existe antes de usá-lo.
-    - [ ] Crie `azure/startup.sh` idempotente. Crie as pastas e o symlink de `storage/app/public` para `/home/data`.
-    - [ ] Copie o Nginx e recarregue com `nginx -s reload`. Teste o comando no App Service real.
-    - [ ] Copie o backup de `database.sqlite` com timestamp antes do `migrate --force`.
-    - [ ] Gere `config:cache`, `route:cache` e `view:cache` no build, não no startup. Valide `route:cache` localmente.
-    - [ ] Configure `.gitattributes` com `export-ignore` para `context/`, `docs/`, `documentacao/`, `tests/`, `*.md`, `run.sh` e `composer.phar`.
+    - [x] Crie `azure/nginx.conf` com `root` em `public`, `client_max_body_size 16M` e `try_files`.
+    - [x] Bloqueie arquivos ocultos e a execução de `.php` em `/storage/`.
+    - [x] Crie `public/.user.ini` com `upload_max_filesize=12M` e `post_max_size=16M`. Confirme que o `PHP_INI_SCAN_DIR` do runtime existe antes de usá-lo.
+    - [x] Crie `azure/startup.sh` idempotente. Crie as pastas e o symlink de `storage/app/public` para `/home/data`.
+    - [x] Copie o Nginx e recarregue com `nginx -s reload`. Teste o comando no App Service real.
+    - [x] Copie o backup de `database.sqlite` com timestamp antes do `migrate --force`.
+    - [x] Gere `config:cache`, `route:cache` e `view:cache` no build, não no startup. Valide `route:cache` localmente.
+    - [x] Configure `.gitattributes` com `export-ignore` para `context/`, `docs/`, `documentacao/`, `tests/`, `*.md`, `run.sh` e `composer.phar`.
   - **Critério de aceite:** O startup conclui em menos de 230 s. Um segundo boot não altera dados.
 
-- [ ] **Task 9.3 (`API-16`): Limpeza do Repositório e Pacote de Build**
+- [x] **Task 9.3 (`API-16`): Limpeza do Repositório e Pacote de Build**
   - **Arquivos:** `.gitignore`, `bootstrap/cache/`, `database/database.sqlite`, `composer.phar`, `.github/workflows/deploy-backend.yml`
   - **Escopo:**
-    - [ ] Remova `bootstrap/cache/*.php`, `database/database.sqlite` e `composer.phar` do índice Git.
-    - [ ] Adicione os mesmos caminhos ao `.gitignore`.
-    - [ ] Crie o workflow com PHP 8.3 (`shivammathur/setup-php@v2`), `composer install --no-dev` e `php artisan test`.
-    - [ ] Gere o ZIP sem `.env*`, sem `tests/` e sem `vendor` de desenvolvimento.
-    - [ ] Publique o ZIP com `az webapp deploy`. Guarde o ZIP anterior como artefato de rollback.
-    - [ ] Confirme que nenhum `.env` entra no ZIP.
+    - [x] Remova `bootstrap/cache/*.php`, `database/database.sqlite` e `composer.phar` do índice Git.
+    - [x] Adicione os mesmos caminhos ao `.gitignore`.
+    - [x] Crie o workflow com PHP 8.3 (`shivammathur/setup-php@v2`), `composer install --no-dev` e `php artisan test`.
+    - [x] Gere o ZIP sem `.env*`, sem `tests/` e sem `vendor` de desenvolvimento.
+    - [x] Publique o ZIP com `az webapp deploy`. Guarde o ZIP anterior como artefato de rollback.
+    - [x] Confirme que nenhum `.env` entra no ZIP.
   - **Critério de aceite:** O ZIP não contém `collision`, `termwind`, `.env` nem `.sqlite`. A suíte passa em PHP 8.3.
 
-- [ ] **Task 9.4 (`API-17`): Provisionamento Azure e App Settings**
+- [x] **Task 9.4 (`API-17`): Provisionamento Azure e App Settings**
   - **Arquivos:** `azure/provision.sh`, `azure/appsettings.example.env`
   - **Escopo:**
-    - [ ] Valide a assinatura Azure for Students, a quota de B1 e a região (`brazilsouth` ou `eastus2`).
-    - [ ] Valide a unicidade do nome do Web App.
-    - [ ] Crie `azure/provision.sh` com grupo, plano B1 Linux e Web App `PHP:8.3`.
-    - [ ] Ative `https-only`, `always-on`, TLS 1.2 e FTPS desativado.
-    - [ ] Defina `WEBSITES_CONTAINER_START_TIME_LIMIT` e fixe uma única instância.
-    - [ ] Configure `APP_KEY`, `APP_URL`, `FILESYSTEM_DISK=public`, `QUEUE_CONNECTION=sync`, `SESSION_DRIVER=file`, `CACHE_STORE=file` e `LOG_CHANNEL=stderr`.
-    - [ ] Crie um alerta de custo e de orçamento no Azure.
+    - [x] Valide a assinatura Azure for Students, a quota de B1 e a região (`brazilsouth` ou `eastus2`).
+    - [x] Valide a unicidade do nome do Web App.
+    - [x] Crie `azure/provision.sh` com grupo, plano B1 Linux e Web App `PHP:8.3`.
+    - [x] Ative `https-only`, `always-on`, TLS 1.2 e FTPS desativado.
+    - [x] Defina `WEBSITES_CONTAINER_START_TIME_LIMIT` e fixe uma única instância.
+    - [x] Configure `APP_KEY`, `APP_URL`, `FILESYSTEM_DISK=public`, `QUEUE_CONNECTION=sync`, `SESSION_DRIVER=file`, `CACHE_STORE=file` e `LOG_CHANNEL=stderr`.
+    - [x] Crie um alerta de custo e de orçamento no Azure.
   - **Critério de aceite:** `GET /up` retorna `200` em `https://<app>.azurewebsites.net`.
 
-- [ ] **Task 9.5 (`API-18`): Risco de SQLite em `/home` e Backup**
-  - **Arquivos:** `azure/backup.sh`, `app/Http/Controllers/Api/TrackController.php`
+- [x] **Task 9.5 (`API-18`): Risco de SQLite em `/home` e Backup**
+  - **Arquivos:** `azure/backup.sh`, `config/database.php`
   - **Escopo:**
-    - [ ] Execute teste de carga em `POST /api/v1/track` e `GET /r/{id}` com SQLite em `/home/data`.
-    - [ ] Habilite `PRAGMA journal_mode=WAL` e `busy_timeout` na conexão SQLite, se o teste mostrar `database is locked`.
-    - [ ] Crie `azure/backup.sh` para copiar o banco com timestamp.
-    - [ ] Documente o procedimento de restauração.
-    - [ ] Defina o gatilho de migração para a Task 8.1 (PostgreSQL ou MySQL).
+    - [x] Execute teste de carga em `POST /api/v1/track` e `GET /r/{id}` com SQLite em `/home/data`.
+    - [x] Habilite `PRAGMA journal_mode=WAL` e `busy_timeout` na conexão SQLite, se o teste mostrar `database is locked`.
+    - [x] Crie `azure/backup.sh` para copiar o banco com timestamp.
+    - [x] Documente o procedimento de restauração.
+    - [x] Defina o gatilho de migração para a Task 8.1 (PostgreSQL ou MySQL).
   - **Critério de aceite:** O teste não registra `database is locked`. O backup restaura o banco.
 
-- [ ] **Task 9.6 (`API-19`): Smoke Test, E2E e Rollback**
+- [x] **Task 9.6 (`API-19`): Smoke Test, E2E e Rollback**
   - **Arquivos:** `context/DEPLOY_PLAN.md`
   - **Escopo:**
-    - [ ] Conecte o frontend: defina `VITE_API_BASE_URL` e `VITE_USE_MOCK_API=false` e dispare `deploy-pages.yml`.
-    - [ ] Valide DNS e HTTPS de `assin.art` e `www.assin.art`.
-    - [ ] Execute os smoke tests: `/up`, `/`, `/api/v1/usernames/check` e o preflight `OPTIONS`.
-    - [ ] Execute o E2E anônimo: cadastro, upload maior que 2 MB, publicação, `GET /{username}`, `POST /track` e `GET /r/{id}`.
-    - [ ] Reinicie o Web App e confirme que banco e uploads persistem.
-    - [ ] Documente que `forgot-password` não envia e-mail (`MAIL_MAILER=log`).
-    - [ ] Atualize o rollback: restaure o ZIP anterior, restaure o backup do banco e reverta o schema.
-    - [ ] Atualize `context/DEPLOY_PLAN.md` com as correções desta fase.
+    - [x] Conecte o frontend: defina `VITE_API_BASE_URL` e `VITE_USE_MOCK_API=false` e dispare `deploy-pages.yml`.
+    - [x] Valide DNS e HTTPS de `assin.art` e `www.assin.art`.
+    - [x] Execute os smoke tests: `/up`, `/`, `/api/v1/usernames/check` e o preflight `OPTIONS`.
+    - [x] Execute o E2E anônimo: cadastro, upload maior que 2 MB, publicação, `GET /{username}`, `POST /track` e `GET /r/{id}`.
+    - [x] Reinicie o Web App e confirme que banco e uploads persistem.
+    - [x] Documente que `forgot-password` não envia e-mail (`MAIL_MAILER=log`).
+    - [x] Atualize o rollback: restaure o ZIP anterior, restaure o backup do banco e reverta o schema.
+    - [x] Atualize `context/DEPLOY_PLAN.md` com as correções desta fase.
   - **Critério de aceite:** O E2E passa em produção. O rollback roda em menos de 15 minutos.
 
 ---

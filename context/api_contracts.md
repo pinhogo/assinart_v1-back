@@ -67,7 +67,8 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 - **Campo `name`:** Nome artístico ou de exibição do artista. Obrigatório no formulário e persistido na tabela `ARTISTS`.
 - **Regra de `username` (unificada em registro, `PATCH /api/v1/profile` e `/usernames/check`):** Normalizado antes da validação (`trim`, `strtolower`, remoção de `@` inicial). Aceita `[a-z0-9_.-]` com `2` a `30` caracteres, não pode começar nem terminar com `.`, não pode conter `..`, rejeita palavras reservadas e exige unicidade em minúsculas.
 - **Estado Inicial de Publicação:** Toda nova conta inicia com `is_published: false` e `publication_status: "draft"`. O endpoint ignora flags de publicação enviados pelo cliente no cadastro.
-- **Respostas de Erro:** 422 Unprocessable Entity (username em uso, e-mail duplicado, senha curta ou nome vazio).
+- **Requisitos de Senha e Tokens (`SEC-05`, `SEC-08`):** O cadastro (`POST /api/v1/auth/register`) e a redefinição de senha (`POST /api/v1/auth/reset-password`) exigem senha com no mínimo `8` caracteres. Os tokens Sanctum expiram conforme `SANCTUM_EXPIRATION` (padrão `43200` minutos / 30 dias), e o reset de senha revoga todos os tokens ativos do artista.
+- **Respostas de Erro:** 422 Unprocessable Entity (username em uso, e-mail duplicado, senha curta ou nome vazio), 429 Too Many Requests (throttling por rota).
 
 ### 2.2 Login de Artista (`POST /api/v1/auth/login`)
 - **Acesso:** Público.
@@ -104,7 +105,8 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 
 ### 2.4 Logout (`POST /api/v1/auth/logout`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Logout realizado com sucesso." }`.
+- **Corpo Opcional:** `{ "all": true }` ou `{ "revoke_all": true }` para revogar todos os tokens Sanctum do artista; sem esse parâmetro, revoga apenas o token atual.
+- **Resposta de Sucesso (200 OK):** `{ "status": "success", "message": "Sessão encerrada com sucesso." }`.
 
 ### 2.5 Exclusão de Conta (`POST /api/v1/auth/account/delete`)
 - **Acesso:** Bearer Token.
@@ -377,13 +379,12 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 
 ### 7.1 Obter Perfil Público (`GET /{username}`)
 - **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
-- **Controle de Publicação:** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` com `{ "status": "draft", "message": "Perfil ainda não publicado." }` (sem dados do artista) para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor.
+- **Controle de Publicação e Privacidade (`FIX-API-07`, `SEC-07`):** Quando `is_published` vale `false` (`draft`), o endpoint retorna `404 Not Found` com `{ "status": "draft", "message": "Perfil ainda não publicado." }` (sem dados do artista) para visitantes anônimos e para outros artistas autenticados. Quando o token Bearer pertence ao proprietário da página, o endpoint retorna `200 OK` para pré-visualização no editor. O payload público de `artist` e `data` não expõe o identificador interno `artists.id`.
 - **Resposta de Sucesso (200 OK):**
   ```json
   {
     "status": "found",
     "artist": {
-      "id": 1,
       "name": "Nome do Artista",
       "username": "nomedeusuario",
       "bio": "Texto da biografia.",
@@ -417,7 +418,6 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
     ],
     "button_links": [],
     "data": {
-      "id": 1,
       "name": "Nome do Artista",
       "username": "nomedeusuario",
       "bio": "Texto da biografia.",
