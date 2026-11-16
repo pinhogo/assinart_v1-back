@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Concerns\AggregatesMetrics;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\TrackEventRequest;
 use App\Models\Artist;
 use App\Models\Button;
 use App\Models\ButtonClick;
@@ -16,33 +17,42 @@ class MetricsController extends Controller
 {
     use AggregatesMetrics;
 
-    public function track(Request $request): Response|JsonResponse
+    public function track(TrackEventRequest $request): Response|JsonResponse
     {
-        $type = $request->input('type');
-        $username = ltrim(strtolower(trim($request->input('username', ''))), '@');
-        $visitorId = $request->input('visitor_id') ?? $request->ip() ?? 'anonymous';
+        $validated = $request->validated();
+        $type = $validated['type'];
+        $username = ltrim(strtolower(trim((string) ($validated['username'] ?? ''))), '@');
+        $rawVisitorId = $validated['visitor_id'] ?? $request->ip() ?? 'anonymous';
+        $visitorId = mb_substr((string) $rawVisitorId, 0, 64);
 
         if ($type === 'pageview') {
-            $artist = Artist::where('username', $username)->first();
+            $artist = $username !== ''
+                ? Artist::where('username', $username)->where('is_published', true)->first()
+                : null;
             if ($artist) {
+                $userAgent = $validated['user_agent'] ?? $request->userAgent();
                 PageView::create([
                     'artist_id' => $artist->id,
                     'visitor_id' => $visitorId,
-                    'referrer_source' => $this->classifyReferrer($request->input('referrer')),
-                    'device_type' => $this->classifyDevice($request->input('user_agent') ?? $request->userAgent()),
-                    'utm_source' => $request->input('utm_source'),
-                    'referrer' => $request->input('referrer'),
-                    'user_agent' => $request->input('user_agent') ?? $request->userAgent(),
+                    'referrer_source' => $this->classifyReferrer($validated['referrer'] ?? null),
+                    'device_type' => $this->classifyDevice($userAgent),
+                    'utm_source' => $validated['utm_source'] ?? null,
+                    'referrer' => $validated['referrer'] ?? null,
+                    'user_agent' => $userAgent,
                     'viewed_at' => now(),
                 ]);
             }
+
             return response()->noContent();
         }
 
         if ($type === 'click') {
-            $linkId = $request->input('link_id');
+            $linkId = $validated['link_id'] ?? null;
             if ($linkId) {
-                $button = Button::find($linkId);
+                $button = Button::where('id', $linkId)
+                    ->where('is_active', true)
+                    ->whereHas('artist', fn ($q) => $q->where('is_published', true))
+                    ->first();
                 if ($button) {
                     $button->increment('clicks_count');
                     ButtonClick::create([
@@ -52,6 +62,7 @@ class MetricsController extends Controller
                     ]);
                 }
             }
+
             return response()->noContent();
         }
 
@@ -66,11 +77,9 @@ class MetricsController extends Controller
             $period = '30d';
         }
 
-        $summary = $this->buildMetricsSummary($artist, $period);
-
         return response()->json([
             'status' => 'success',
-            'data' => $summary,
+            'data' => $this->buildMetricsSummary($artist, $period),
         ], 200);
     }
 }

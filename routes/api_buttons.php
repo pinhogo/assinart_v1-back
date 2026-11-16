@@ -25,7 +25,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/buttons', [ButtonController::class, 'store']);
     Route::delete('/buttons', [ButtonController::class, 'destroyAll']);
     Route::post('/buttons/reorder', [ButtonController::class, 'reorder']);
-    Route::post('/buttons/{id}/image', [ButtonController::class, 'uploadImage']);
+    Route::post('/buttons/{id}/image', [ButtonController::class, 'uploadImage'])->middleware('throttle:20,1');
     Route::put('/buttons/{id}', [ButtonController::class, 'update']);
     Route::patch('/buttons/{id}', [ButtonController::class, 'update']);
     Route::delete('/buttons/{id}', [ButtonController::class, 'destroy']);
