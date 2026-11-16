@@ -1,0 +1,76 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: docker/azure-sim/Dockerfile
+    image: assinart-azure-sim:latest
+    container_name: assinart-azure-sim-app
+    cpus: 1.0
+    mem_limit: 1792m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1792M
+    restart: unless-stopped
+    ports:
+      - "${AZURE_SIM_PORT:-8080}:8080"
+    volumes:
+      - azure_sim_data:/home/data
+    environment:
+      APP_NAME: Assinart
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:-base64:QXNzaW5hcnRBenVyZVNpbUtleTIwMjZCMUxvYWRUc3Q=}
+      APP_TIMEZONE: America/Sao_Paulo
+      APP_LOCALE: pt_BR
+      APP_URL: ${APP_URL:-http://127.0.0.1:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-https://assin.art}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://assin.art,https://www.assin.art,http://localhost:5173,http://127.0.0.1:5173}
+      DB_CONNECTION: ${DB_CONNECTION:-sqlite}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-/home/data/database.sqlite}
+      DB_USERNAME: ${DB_USERNAME:-assinart}
+      DB_PASSWORD: ${DB_PASSWORD:-assinart_sim_secret}
+      DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      DB_SQLITE_JOURNAL_MODE: ${DB_SQLITE_JOURNAL_MODE:-WAL}
+      DB_SQLITE_BUSY_TIMEOUT: ${DB_SQLITE_BUSY_TIMEOUT:-5000}
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+      FILESYSTEM_DISK: public
+      MEDIA_DISK: public
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_STACK: ${LOG_STACK:-single,stderr}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      MAIL_MAILER: log
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: assinart-azure-sim-postgres
+    profiles:
+      - postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-assinart}
+      POSTGRES_USER: ${PG_USERNAME:-assinart}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-assinart_sim_secret}
+    volumes:
+      - azure_sim_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USERNAME:-assinart} -d ${PG_DATABASE:-assinart}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  azure_sim_data:
+  azure_sim_pgdata:
