@@ -148,7 +148,7 @@ if [ "${DB_CONNECTION}" = "pgsql" ]; then
   az postgres flexible-server db create \
     --resource-group "${RG}" \
     --server-name "${PG_SERVER_NAME}" \
-    --database-name "${PG_DATABASE}" \
+    --name "${PG_DATABASE}" \
     --output none || true
 fi
 
