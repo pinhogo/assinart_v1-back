@@ -1890,8 +1890,8 @@
 
 ### [API-24] Parametrizar TTL de Verificação de E-mail (>= 1h) e Clareza de Reenvio
 
-- **Estado no Backlog:** Pendente *(triado de `pinhogo/assinart_v1#330`)*
-- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `CAD (Cadastro)` | Etapa `Fluxo B (Planejado)` (https://github.com/pinhogo/assinart_v1/issues/330)
+- **Estado no Backlog:** Concluída (`1bdc2bc` em `develop` via Orca `run_bfd4d11c37e2` — `461` passed, `3` skipped)
+- **GitHub Project (#2):** Status `DONE` | Domínio `CAD (Cadastro)` | Etapa `Etapa 3 (Testes/Docs)` (https://github.com/pinhogo/assinart_v1/issues/330)
 
 **Contexto Bruto:**
 
