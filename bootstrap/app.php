@@ -38,10 +38,12 @@ if (($_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? getenv('APP_ENV') ?: 'production
     }
 }
 
+use App\Http\Middleware\HandlePublicProfileCors;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\HandleCors;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -56,6 +58,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->replace(HandleCors::class, HandlePublicProfileCors::class);
         $middleware->trustProxies(at: '*');
         $middleware->append(SecurityHeaders::class);
         //$middleware->statefulApi();
