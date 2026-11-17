@@ -31,7 +31,7 @@
                     <a href="{{ $verificationUrl }}" style="color: #000000;">{{ $verificationUrl }}</a>
                 </p>
                 <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #555555;">
-                    Este link expira em 24 horas e pode ser utilizado apenas uma vez. Se você não criou esta conta, ignore este e-mail.
+                    Este link expira em {{ $expiresInLabel ?? '24 horas' }} e pode ser utilizado apenas uma vez. Solicitar um novo e-mail de confirmação invalida os links anteriores. Se você não criou esta conta, ignore este e-mail.
                 </p>
             </td>
         </tr>

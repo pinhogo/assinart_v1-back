@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\VerifyEmailMail;
 use App\Models\Artist;
+use App\Services\EmailVerificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
@@ -290,5 +291,121 @@ class EmailVerificationTest extends TestCase
             ->assertStatus(200);
 
         $this->assertNotNull($meVerified->json('data.email_verified_at'));
+    }
+
+    public function test_email_verification_ttl_defaults_to_24h_supports_60_minutes_and_enforces_minimum_60_minutes(): void
+    {
+        Mail::fake();
+        $service = app(EmailVerificationService::class);
+
+        try {
+            putenv('EMAIL_VERIFICATION_TTL_MINUTES');
+            unset($_ENV['EMAIL_VERIFICATION_TTL_MINUTES'], $_SERVER['EMAIL_VERIFICATION_TTL_MINUTES']);
+            Config::set('auth.verification.expire', null);
+
+            $this->assertSame(1440, $service->resolveTtlMinutes());
+
+            $defaultArtist = Artist::factory()->create([
+                'email' => 'ttl_default@assin.art',
+                'email_verified_at' => null,
+            ]);
+            $service->sendVerificationEmail($defaultArtist);
+
+            Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) {
+                $html = html_entity_decode($mail->render(), ENT_QUOTES, 'UTF-8');
+
+                return $mail->hasTo('ttl_default@assin.art')
+                    && $mail->ttlMinutes === 1440
+                    && $mail->expiresInLabel === '24 horas'
+                    && str_contains($html, 'Este link expira em 24 horas')
+                    && str_contains($html, 'invalida os links anteriores');
+            });
+
+            putenv('EMAIL_VERIFICATION_TTL_MINUTES=60');
+            $_ENV['EMAIL_VERIFICATION_TTL_MINUTES'] = '60';
+            $_SERVER['EMAIL_VERIFICATION_TTL_MINUTES'] = '60';
+
+            $this->assertSame(60, $service->resolveTtlMinutes());
+
+            $valid59Artist = Artist::factory()->create([
+                'email' => 'ttl_59@assin.art',
+                'email_verified_at' => null,
+            ]);
+            $service->sendVerificationEmail($valid59Artist);
+
+            $token59 = null;
+            Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use (&$token59) {
+                if (!$mail->hasTo('ttl_59@assin.art')) {
+                    return false;
+                }
+                $token59 = $mail->plainToken;
+                $html = html_entity_decode($mail->render(), ENT_QUOTES, 'UTF-8');
+
+                return $mail->ttlMinutes === 60
+                    && $mail->expiresInLabel === '1 hora'
+                    && str_contains($html, 'Este link expira em 1 hora');
+            });
+
+            $this->travel(59)->minutes();
+            $this->postJson('/api/v1/auth/email/verify', [
+                'email' => 'ttl_59@assin.art',
+                'token' => $token59,
+            ])->assertStatus(200)->assertJson(['status' => 'success']);
+            $this->travelBack();
+
+            $expired61Artist = Artist::factory()->create([
+                'email' => 'ttl_61@assin.art',
+                'email_verified_at' => null,
+            ]);
+            $service->sendVerificationEmail($expired61Artist);
+
+            $token61 = null;
+            Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use (&$token61) {
+                if (!$mail->hasTo('ttl_61@assin.art')) {
+                    return false;
+                }
+                $token61 = $mail->plainToken;
+                return true;
+            });
+
+            $this->travel(61)->minutes();
+            $this->postJson('/api/v1/auth/email/verify', [
+                'email' => 'ttl_61@assin.art',
+                'token' => $token61,
+            ])->assertStatus(422)->assertJson(['status' => 'error']);
+            $this->travelBack();
+
+            putenv('EMAIL_VERIFICATION_TTL_MINUTES=15');
+            $_ENV['EMAIL_VERIFICATION_TTL_MINUTES'] = '15';
+            $_SERVER['EMAIL_VERIFICATION_TTL_MINUTES'] = '15';
+
+            $this->assertSame(60, $service->resolveTtlMinutes());
+
+            $minFloorArtist = Artist::factory()->create([
+                'email' => 'ttl_floor@assin.art',
+                'email_verified_at' => null,
+            ]);
+            $service->sendVerificationEmail($minFloorArtist);
+
+            $tokenFloor = null;
+            Mail::assertSent(VerifyEmailMail::class, function (VerifyEmailMail $mail) use (&$tokenFloor) {
+                if (!$mail->hasTo('ttl_floor@assin.art')) {
+                    return false;
+                }
+                $tokenFloor = $mail->plainToken;
+
+                return $mail->ttlMinutes === 60 && $mail->expiresInLabel === '1 hora';
+            });
+
+            $this->travel(59)->minutes();
+            $this->postJson('/api/v1/auth/email/verify', [
+                'email' => 'ttl_floor@assin.art',
+                'token' => $tokenFloor,
+            ])->assertStatus(200)->assertJson(['status' => 'success']);
+            $this->travelBack();
+        } finally {
+            putenv('EMAIL_VERIFICATION_TTL_MINUTES');
+            unset($_ENV['EMAIL_VERIFICATION_TTL_MINUTES'], $_SERVER['EMAIL_VERIFICATION_TTL_MINUTES']);
+        }
     }
 }
