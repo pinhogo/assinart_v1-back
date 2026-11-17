@@ -13,6 +13,7 @@ class VerifyEmailMail extends Mailable
     use Queueable, SerializesModels;
 
     public string $verificationUrl;
+    public string $expiresInLabel;
 
     /**
      * Create a new message instance.
@@ -21,6 +22,7 @@ class VerifyEmailMail extends Mailable
         public string $artistName,
         public string $email,
         public string $plainToken,
+        public int $ttlMinutes = 1440,
     ) {
         $baseUrl = config('app.frontend_url', env('FRONTEND_URL', 'https://assin.art'));
         $frontendUrl = rtrim((string) ($baseUrl ?: 'https://assin.art'), '/');
@@ -28,6 +30,13 @@ class VerifyEmailMail extends Mailable
         $this->verificationUrl = $frontendUrl
             . '/confirmacao-email?email=' . urlencode($this->email)
             . '&token=' . urlencode($this->plainToken);
+
+        if ($this->ttlMinutes % 60 === 0) {
+            $hours = intdiv($this->ttlMinutes, 60);
+            $this->expiresInLabel = $hours === 1 ? '1 hora' : "{$hours} horas";
+        } else {
+            $this->expiresInLabel = "{$this->ttlMinutes} minutos";
+        }
     }
 
     /**

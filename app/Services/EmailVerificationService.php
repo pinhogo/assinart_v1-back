@@ -15,6 +15,15 @@ use Illuminate\Support\Str;
 class EmailVerificationService
 {
     public const TOKEN_TTL_HOURS = 24;
+    public const MIN_TOKEN_TTL_MINUTES = 60;
+    public const DEFAULT_TOKEN_TTL_MINUTES = 1440;
+
+    public function resolveTtlMinutes(): int
+    {
+        $configured = env('EMAIL_VERIFICATION_TTL_MINUTES', config('auth.verification.expire'));
+
+        return max(self::MIN_TOKEN_TTL_MINUTES, (int) ($configured ?: self::DEFAULT_TOKEN_TTL_MINUTES));
+    }
 
     /**
      * Gera token único SHA-256, persiste em email_verification_tokens e envia o e-mail.
@@ -24,19 +33,20 @@ class EmailVerificationService
         $email = $this->normalizeEmail($artist->email);
         $plainToken = Str::random(64);
         $tokenHash = hash('sha256', $plainToken);
+        $ttlMinutes = $this->resolveTtlMinutes();
         $now = now();
 
-        DB::transaction(function () use ($email, $tokenHash, $now) {
+        DB::transaction(function () use ($email, $tokenHash, $ttlMinutes, $now) {
             DB::table('email_verification_tokens')->where('email', $email)->delete();
             DB::table('email_verification_tokens')->insert([
                 'email' => $email,
                 'token_hash' => $tokenHash,
-                'expires_at' => $now->copy()->addHours(self::TOKEN_TTL_HOURS),
+                'expires_at' => $now->copy()->addMinutes($ttlMinutes),
                 'created_at' => $now,
             ]);
         });
 
-        Mail::to($email)->send(new VerifyEmailMail($artist->name, $email, $plainToken));
+        Mail::to($email)->send(new VerifyEmailMail($artist->name, $email, $plainToken, $ttlMinutes));
     }
 
     /**
@@ -46,9 +56,7 @@ class EmailVerificationService
     {
         if ($request->hasValidSignature()) {
             $artist = $this->verifyBySignedUrl($request);
-            return $artist
-                ? $this->verifiedResponse($artist)
-                : $this->errorResponse(403, 'Link de verificação inválido ou expirado.');
+            return $artist ? $this->verifiedResponse($artist) : $this->errorResponse(403, 'Link de verificação inválido ou expirado.');
         }
 
         if (!$request->has('token')) {
@@ -72,10 +80,7 @@ class EmailVerificationService
             ], 422);
         }
 
-        $artist = $this->verifyByToken(
-            (string) $request->input('email'),
-            (string) $request->input('token'),
-        );
+        $artist = $this->verifyByToken((string) $request->input('email'), (string) $request->input('token'));
 
         if (!$artist) {
             return response()->json([
@@ -94,10 +99,7 @@ class EmailVerificationService
     public function verifyByToken(string $rawEmail, string $plainToken): ?Artist
     {
         $email = $this->normalizeEmail($rawEmail);
-        $record = DB::table('email_verification_tokens')
-            ->where('email', $email)
-            ->orderByDesc('id')
-            ->first();
+        $record = DB::table('email_verification_tokens')->where('email', $email)->orderByDesc('id')->first();
 
         if (!$record) {
             return null;
