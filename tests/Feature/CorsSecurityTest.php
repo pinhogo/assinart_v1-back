@@ -188,4 +188,74 @@ class CorsSecurityTest extends TestCase
         $response->assertStatus(404);
         $this->assertNull(Route::currentRouteName());
     }
+
+    /**
+     * Tier 1: Preflight OPTIONS para rota pública /{username} retorna cabeçalhos CORS válidos.
+     */
+    public function test_preflight_options_request_for_public_profile_returns_cors_headers(): void
+    {
+        $response = $this->withHeaders([
+            'Origin' => 'https://assin.art',
+            'Access-Control-Request-Method' => 'GET',
+            'Access-Control-Request-Headers' => 'Accept, Authorization',
+        ])->options('/assin');
+
+        $response->assertStatus(204)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://assin.art')
+            ->assertHeaderMissing('Access-Control-Allow-Credentials');
+    }
+
+    /**
+     * Tier 1: GET /{username} inclui Access-Control-Allow-Origin tanto para perfil publicado (200) quanto draft/inexistente (404).
+     */
+    public function test_get_public_profile_includes_cors_header_for_published_and_draft_profiles(): void
+    {
+        Artist::factory()->create([
+            'username' => 'cors_public_ok',
+            'is_published' => true,
+        ]);
+
+        Artist::factory()->create([
+            'username' => 'cors_public_draft',
+            'is_published' => false,
+        ]);
+
+        $this->withHeaders(['Origin' => 'https://assin.art'])
+            ->getJson('/cors_public_ok')
+            ->assertStatus(200)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://assin.art')
+            ->assertHeaderMissing('Access-Control-Allow-Credentials');
+
+        $this->withHeaders(['Origin' => 'https://assin.art'])
+            ->getJson('/cors_public_draft')
+            ->assertStatus(404)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://assin.art')
+            ->assertHeaderMissing('Access-Control-Allow-Credentials');
+
+        $this->withHeaders(['Origin' => 'https://assin.art'])
+            ->getJson('/perfil_inexistente_cors')
+            ->assertStatus(404)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://assin.art');
+    }
+
+    /**
+     * Tier 2: Origem não autorizada e /storage/* não recebem Access-Control-Allow-Origin nas rotas públicas.
+     */
+    public function test_unauthorized_origin_and_storage_path_do_not_receive_cors_headers_on_public_routes(): void
+    {
+        Artist::factory()->create([
+            'username' => 'cors_public_blocked',
+            'is_published' => true,
+        ]);
+
+        $this->withHeaders(['Origin' => 'http://site-malicioso.com'])
+            ->getJson('/cors_public_blocked')
+            ->assertStatus(200)
+            ->assertHeaderMissing('Access-Control-Allow-Origin');
+
+        $this->withHeaders(['Origin' => 'https://assin.art'])
+            ->get('/storage/x')
+            ->assertStatus(404)
+            ->assertHeaderMissing('Access-Control-Allow-Origin');
+    }
 }
