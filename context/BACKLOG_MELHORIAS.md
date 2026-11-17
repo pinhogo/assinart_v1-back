@@ -1886,6 +1886,35 @@
 
 ---
 
+## ⏱️ Confirmação de E-mail — Janela Mínima >= 1h (`BACKLOG - FLUXO B` — Lote `#330`)
+
+### [API-24] Parametrizar TTL de Verificação de E-mail (>= 1h) e Clareza de Reenvio
+
+- **Estado no Backlog:** Pendente *(triado de `pinhogo/assinart_v1#330`)*
+- **GitHub Project (#2):** Status `BACKLOG - FLUXO B` | Domínio `CAD (Cadastro)` | Etapa `Fluxo B (Planejado)` (https://github.com/pinhogo/assinart_v1/issues/330)
+
+**Contexto Bruto:**
+
+> Aumentar o tempo de verificar o email, é pouquíssimo tempo levando em conta que o usuário vai ficar personalizando, podia durar 1 hora
+
+**Pré-Tasks / Subtarefas Técnicas (Gerado por IA — Padrão ASD-STE100):**
+
+- **Problema:** `EmailVerificationService::TOKEN_TTL_HOURS` (`app/Services/EmailVerificationService.php`, linha 17) e `resources/views/emails/verify-email.blade.php` (linha 34) já definem validade de **24 horas** (bem acima de 1 hora). Porém, `TOKEN_TTL_HOURS` é constante fixa sem env/config, e `sendVerificationEmail()` apaga imediatamente o token anterior em `email_verification_tokens` ao reenviar, fazendo um clique no e-mail anterior parecer "expirado" logo após alguns minutos de personalização.
+- **Solução Proposta:** Substitua a constante rígida por configuração em minutos (`config('auth.email_verification_ttl_minutes')` / `EMAIL_VERIFICATION_TTL_MINUTES`, padrão `1440` min = 24h com piso mínimo garantido de `60` min = 1h), exiba dinamicamente a duração legível no template `verify-email.blade.php` e avalie/documente o comportamento ao reenviar (ex.: manter janela explícita ou mensagem clara de link substituído por reenvio).
+- **OBS:** Não reduzir de 24h para 1h caso o padrão de 24h seja mais seguro para usuários que personalizam por mais tempo — garanta que nunca seja `< 60` minutos e esclareça ao usuário que hoje já dura 24h.
+- **Como Executar (Subtarefas):**
+  - [ ] **API-24.1.** Adicione suporte a `EMAIL_VERIFICATION_TTL_MINUTES` (padrão `1440`, mínimo `60`) em `app/Services/EmailVerificationService.php` (e `config/auth.php` ou fallback direto com `env`/`config`).
+  - [ ] **API-24.2.** Atualize `app/Mail/VerifyEmailMail.php` e `resources/views/emails/verify-email.blade.php` para exibir a validade configurada sem string fixa inconsistente.
+  - [ ] **API-24.3.** Adicione testes em `tests/Feature/EmailVerificationTest.php` cobrindo o piso mínimo de 60 minutos e token válido após 1h de personalização.
+
+**Localização & Referências:**
+
+- **Rota / URL:** `POST /api/v1/auth/email/verify`, `POST /api/v1/auth/email/resend`
+- **Arquivos / Pastas:** `app/Services/EmailVerificationService.php` | `app/Mail/VerifyEmailMail.php` | `resources/views/emails/verify-email.blade.php` | `tests/Feature/EmailVerificationTest.php`
+- **Docs / Assets:** `assinart_v1/context/BACKLOG_MELHORIAS.md` | Issue `pinhogo/assinart_v1#330`
+
+---
+
 ## 🧪 Teste de Carga em Container (Simulação Azure `B1`) — `BACKLOG - FLUXO B`
 
 ### [API-23] Simular Teste de Carga Local em Container com Limites do Azure App Service (B1)
