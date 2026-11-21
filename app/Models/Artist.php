@@ -66,6 +66,7 @@ class Artist extends Authenticatable
         'cover',
         'background',
         'publication_status',
+        'is_admin',
     ];
 
     protected function casts(): array
@@ -85,6 +86,19 @@ class Artist extends Authenticatable
     public function getPublicationStatusAttribute(): string
     {
         return ($this->is_published ?? true) ? 'published' : 'draft';
+    }
+
+    public function getIsAdminAttribute(): bool
+    {
+        if (empty($this->email) || $this->email_verified_at === null) {
+            return false;
+        }
+
+        $allowed = config('app.admin_emails', []);
+        $items = is_array($allowed) ? $allowed : (is_string($allowed) ? explode(',', $allowed) : []);
+        $normalized = array_filter(array_map(static fn ($e): string => strtolower(trim((string) $e)), $items));
+
+        return in_array(strtolower(trim((string) $this->email)), $normalized, true);
     }
 
     public function getRouteKeyName(): string
