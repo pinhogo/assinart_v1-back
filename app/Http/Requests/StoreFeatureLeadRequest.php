@@ -33,28 +33,29 @@ class StoreFeatureLeadRequest extends FormRequest
         $isGuest = $this->user('sanctum') === null;
 
         $contactRules = [
+            'bail',
             $isGuest ? 'required' : 'nullable',
             'string',
             'max:255',
-        ];
-
-        if ($isGuest) {
-            $contactRules[] = function (string $attribute, mixed $value, Closure $fail): void {
-                $trimmed = trim((string) $value);
+            function (string $attribute, mixed $value, Closure $fail): void {
+                if (! is_string($value) || trim($value) === '') {
+                    return;
+                }
+                $trimmed = trim($value);
                 $isEmail = filter_var($trimmed, FILTER_VALIDATE_EMAIL) !== false;
-                $isHandle = preg_match('/^@?[a-zA-Z0-9_.-]{2,30}$/', $trimmed) === 1;
+                $isHandle = preg_match('/^@?(?!\.)(?!.*\.\.)[a-zA-Z0-9_.-]{2,30}(?<!\.)$/', $trimmed) === 1;
 
                 if (! $isEmail && ! $isHandle) {
                     $fail('Informe um e-mail válido ou um @handle válido.');
                 }
-            };
-        }
+            },
+        ];
 
         return [
             'feature' => ['sometimes', 'string', 'in:vitrine,assistente'],
             'source' => ['required', 'string', 'in:home_hero,home_footer,home_waitlist,editor_banner'],
             'contact_value' => $contactRules,
-            'metadata' => ['nullable', 'array'],
+            'metadata' => ['nullable', 'array', 'max:10'],
             'metadata.selling_type' => ['nullable', 'string', 'in:prints,originais,comissoes'],
             'metadata.selling_types' => ['nullable', 'array', 'max:3'],
             'metadata.selling_types.*' => ['string', 'in:prints,originais,comissoes'],

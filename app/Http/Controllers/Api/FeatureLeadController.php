@@ -25,7 +25,7 @@ class FeatureLeadController extends Controller
             return $this->storeForArtist($artist, $feature, $source, $contactValue, $metadata, $hasMetadata);
         }
 
-        return $this->storeForGuest($feature, $source, (string) $contactValue, $metadata);
+        return $this->storeForGuest($feature, $source, (string) $contactValue, $metadata, $hasMetadata);
     }
 
     public function status(Request $request): JsonResponse
@@ -64,24 +64,18 @@ class FeatureLeadController extends Controller
             ->first();
 
         if ($lead) {
-            if ($hasMetadata) {
-                $lead->metadata = $metadata;
-            }
-            if ($lead->source !== $source) {
-                $lead->source = $source;
-            }
-            if ($lead->isDirty()) {
-                $lead->save();
-            }
-
-            return $this->leadResponse($lead, true, 200);
+            return $this->updateExistingLead($lead, $source, $metadata, $hasMetadata);
         }
+
+        $normalizedContact = $contactValue !== null && trim($contactValue) !== ''
+            ? mb_strtolower(trim($contactValue))
+            : $artist->email;
 
         $lead = FeatureLead::create([
             'artist_id' => $artist->id,
             'feature' => $feature,
             'source' => $source,
-            'contact_value' => $contactValue ?: $artist->email,
+            'contact_value' => $normalizedContact,
             'metadata' => $metadata,
         ]);
 
@@ -95,7 +89,8 @@ class FeatureLeadController extends Controller
         string $feature,
         string $source,
         string $contactValue,
-        ?array $metadata
+        ?array $metadata,
+        bool $hasMetadata
     ): JsonResponse {
         $normalizedContact = mb_strtolower(trim($contactValue));
 
@@ -105,7 +100,7 @@ class FeatureLeadController extends Controller
             ->first();
 
         if ($lead) {
-            return $this->leadResponse($lead, true, 200);
+            return $this->updateExistingLead($lead, $source, $metadata, $hasMetadata);
         }
 
         $lead = FeatureLead::create([
@@ -117,6 +112,30 @@ class FeatureLeadController extends Controller
         ]);
 
         return $this->leadResponse($lead, false, 201);
+    }
+
+    /**
+     * Updates metadata/source when a lead is submitted again and returns 200.
+     *
+     * @param  array<string, mixed>|null  $metadata
+     */
+    private function updateExistingLead(
+        FeatureLead $lead,
+        string $source,
+        ?array $metadata,
+        bool $hasMetadata
+    ): JsonResponse {
+        if ($hasMetadata) {
+            $lead->metadata = $metadata;
+        }
+        if ($lead->source !== $source) {
+            $lead->source = $source;
+        }
+        if ($lead->isDirty()) {
+            $lead->save();
+        }
+
+        return $this->leadResponse($lead, true, 200);
     }
 
     private function leadResponse(FeatureLead $lead, bool $alreadyRegistered, int $status): JsonResponse

@@ -23,7 +23,8 @@ class MetricsController extends Controller
         $validated = $request->validated();
         $type = $validated['type'];
         $username = ltrim(strtolower(trim((string) ($validated['username'] ?? ''))), '@');
-        $rawVisitorId = $validated['visitor_id'] ?? $request->ip() ?? 'anonymous';
+        $providedVisitorId = trim((string) ($validated['visitor_id'] ?? ''));
+        $rawVisitorId = $providedVisitorId !== '' ? $providedVisitorId : ($request->ip() ?? 'anonymous');
         $visitorId = mb_substr((string) $rawVisitorId, 0, 64);
 
         if ($type === 'pageview') {

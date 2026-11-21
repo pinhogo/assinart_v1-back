@@ -19,7 +19,7 @@ class ValidationKpiReportService
      */
     public function generate(int $days = 30): array
     {
-        $days = max(1, $days);
+        $days = max(1, min(3650, $days));
         $from = now()->subDays($days);
         $to = now();
 
@@ -35,56 +35,27 @@ class ValidationKpiReportService
     private function buildKpis(int $days, Carbon $from, Carbon $to): array
     {
         $totalArtists = Artist::count();
-        $activatedArtists = Artist::whereHas('activeButtons')
-            ->whereHas('pageViews', fn ($q) => $q->whereBetween('viewed_at', [$from, $to]), '>=', 5)
-            ->count();
-
+        $activatedArtists = $this->countActivatedArtists($from, $to, 5);
         $totalPageViews = PageView::whereBetween('viewed_at', [$from, $to])->count();
         $totalClicks = ButtonClick::whereBetween('clicked_at', [$from, $to])->count();
         $editorSessions = $this->countUniqueActors('editor_session', $from, $to);
         $vitrineCtaClicks = $this->countUniqueActors('editor_vitrine_cta_clicked', $from, $to);
-
         $newArtists = Artist::whereBetween('created_at', [$from, $to])->count();
         $homeLeads = FeatureLead::where('source', 'like', 'home_%')->whereBetween('created_at', [$from, $to])->count();
         $homeVisitors = $this->countUniqueActors('home_pageview', $from, $to);
 
         return [
-            'artist_activation_rate' => [
-                'value' => $this->percentage($activatedArtists, $totalArtists),
-                'target' => '> 25%',
-                'activated_artists' => $activatedArtists,
-                'total_artists' => $totalArtists,
-                'window_days' => $days,
-            ],
-            'public_links_ctr' => [
-                'value' => $this->percentage($totalClicks, $totalPageViews),
-                'target' => '15% - 30%',
-                'clicks' => $totalClicks,
-                'page_views' => $totalPageViews,
-            ],
-            'editor_vitrine_intent_rate' => [
-                'value' => $this->percentage($vitrineCtaClicks, $editorSessions),
-                'target' => '> 20%',
-                'vitrine_cta_clicks' => $vitrineCtaClicks,
-                'editor_sessions' => $editorSessions,
-            ],
-            'landing_conversion_rate' => [
-                'value' => $this->percentage($newArtists + $homeLeads, $homeVisitors),
-                'target' => '> 5%',
-                'new_artists' => $newArtists,
-                'home_leads' => $homeLeads,
-                'home_unique_visitors' => $homeVisitors,
-            ],
+            'artist_activation_rate' => $this->kpi($activatedArtists, $totalArtists, '> 25%', ['activated_artists' => $activatedArtists, 'total_artists' => $totalArtists, 'window_days' => $days]),
+            'public_links_ctr' => $this->kpi($totalClicks, $totalPageViews, '15% - 30%', ['clicks' => $totalClicks, 'page_views' => $totalPageViews]),
+            'editor_vitrine_intent_rate' => $this->kpi($vitrineCtaClicks, $editorSessions, '> 20%', ['vitrine_cta_clicks' => $vitrineCtaClicks, 'editor_sessions' => $editorSessions]),
+            'landing_conversion_rate' => $this->kpi($newArtists + $homeLeads, $homeVisitors, '> 5%', ['new_artists' => $newArtists, 'home_leads' => $homeLeads, 'home_unique_visitors' => $homeVisitors]),
         ];
     }
 
     /** @return array<string, array<string, mixed>> */
     private function buildKrs(Carbon $to): array
     {
-        $weeklyFrom = now()->subDays(7);
-        $kr1 = Artist::whereHas('activeButtons')
-            ->whereHas('pageViews', fn ($q) => $q->whereBetween('viewed_at', [$weeklyFrom, $to]), '>=', 20)
-            ->count();
+        $kr1 = $this->countActivatedArtists(now()->subDays(7), $to, 20);
         $kr2 = FeatureLead::where('feature', 'vitrine')->count();
 
         return [
@@ -96,47 +67,61 @@ class ValidationKpiReportService
     /** @return array<string, mixed> */
     private function buildLeadsBreakdown(): array
     {
-        $leads = FeatureLead::all(['feature', 'source', 'metadata']);
+        $total = 0;
         $byFeature = ['vitrine' => 0, 'assistente' => 0];
         $bySource = ['home_hero' => 0, 'home_footer' => 0, 'home_waitlist' => 0, 'editor_banner' => 0];
         $sellingPrefs = ['prints' => 0, 'originais' => 0, 'comissoes' => 0];
 
-        foreach ($leads as $lead) {
-            if (is_string($lead->feature) && $lead->feature !== '') {
-                $byFeature[$lead->feature] = ($byFeature[$lead->feature] ?? 0) + 1;
-            }
-            if (is_string($lead->source) && $lead->source !== '') {
-                $bySource[$lead->source] = ($bySource[$lead->source] ?? 0) + 1;
-            }
+        foreach (FeatureLead::query()->select(['feature', 'source', 'metadata'])->cursor() as $lead) {
+            $total++;
+            $this->incrementBucket($byFeature, $lead->feature);
+            $this->incrementBucket($bySource, $lead->source);
             foreach ($this->extractSellingTypes($lead->metadata) as $type) {
-                $sellingPrefs[$type] = ($sellingPrefs[$type] ?? 0) + 1;
+                $this->incrementBucket($sellingPrefs, $type);
             }
         }
 
-        return [
-            'total' => $leads->count(),
-            'by_feature' => $byFeature,
-            'by_source' => $bySource,
-            'selling_preferences' => $sellingPrefs,
-        ];
+        return ['total' => $total, 'by_feature' => $byFeature, 'by_source' => $bySource, 'selling_preferences' => $sellingPrefs];
     }
 
     /** @return array<int, string> */
     private function extractSellingTypes(mixed $metadata): array
     {
-        if (!is_array($metadata)) {
+        if (! is_array($metadata)) {
             return [];
         }
-        $types = [];
-        if (!empty($metadata['selling_type']) && is_string($metadata['selling_type'])) {
-            $types[] = $metadata['selling_type'];
-        }
+        $types = is_string($metadata['selling_type'] ?? null) && $metadata['selling_type'] !== '' ? [$metadata['selling_type']] : [];
         foreach (is_array($metadata['selling_types'] ?? null) ? $metadata['selling_types'] : [] as $type) {
             if (is_string($type) && $type !== '') {
                 $types[] = $type;
             }
         }
+
         return array_values(array_unique($types));
+    }
+
+    /** @param array<string, int> $bucket */
+    private function incrementBucket(array &$bucket, mixed $key): void
+    {
+        if (is_string($key) && $key !== '') {
+            $bucket[$key] = ($bucket[$key] ?? 0) + 1;
+        }
+    }
+
+    /**
+     * @param  array<string, int|float>  $extra
+     * @return array<string, mixed>
+     */
+    private function kpi(int|float $num, int|float $den, string $target, array $extra): array
+    {
+        return array_merge(['value' => $this->percentage($num, $den), 'target' => $target], $extra);
+    }
+
+    private function countActivatedArtists(Carbon $from, Carbon $to, int $minViews): int
+    {
+        return Artist::whereHas('activeButtons')
+            ->whereHas('pageViews', fn ($q) => $q->whereBetween('viewed_at', [$from, $to]), '>=', $minViews)
+            ->count();
     }
 
     private function countUniqueActors(string $eventName, Carbon $from, Carbon $to): int
