@@ -190,17 +190,19 @@ class ValidationKpiReportTest extends TestCase
         ], $report['leads_breakdown']['selling_preferences']);
 
         // Assert Artisan command in table mode
-        $this->artisan('metrics:validation-report', ['--days' => 30])
-            ->expectsOutputToContain('KPI 1: artist_activation_rate')
-            ->expectsOutputToContain('66.67%')
-            ->expectsOutputToContain('KPI 2: public_links_ctr')
-            ->expectsOutputToContain('20%')
-            ->expectsOutputToContain('KPI 3: editor_vitrine_intent_rate')
-            ->expectsOutputToContain('25%')
-            ->expectsOutputToContain('KPI 4: landing_conversion_rate')
-            ->expectsOutputToContain('60%')
-            ->expectsOutputToContain('Feature Leads (Total: 4)')
-            ->assertExitCode(0);
+        $tableExitCode = Artisan::call('metrics:validation-report', ['--days' => 30]);
+        $this->assertSame(0, $tableExitCode);
+        $tableOutput = Artisan::output();
+
+        $this->assertStringContainsString('KPI 1: artist_activation_rate', $tableOutput);
+        $this->assertStringContainsString('66.67%', $tableOutput);
+        $this->assertStringContainsString('KPI 2: public_links_ctr', $tableOutput);
+        $this->assertStringContainsString('20%', $tableOutput);
+        $this->assertStringContainsString('KPI 3: editor_vitrine_intent_rate', $tableOutput);
+        $this->assertStringContainsString('25%', $tableOutput);
+        $this->assertStringContainsString('KPI 4: landing_conversion_rate', $tableOutput);
+        $this->assertStringContainsString('60%', $tableOutput);
+        $this->assertStringContainsString('Feature Leads (Total: 4)', $tableOutput);
 
         // Assert Artisan command in JSON mode
         $exitCode = Artisan::call('metrics:validation-report', ['--days' => 30, '--json' => true]);
