@@ -219,11 +219,11 @@ class AdminDashboardTest extends TestCase
             ->assertJsonPath('data.kpis.editor_vitrine_intent_rate.vitrine_cta_clicks', 1)
             ->assertJsonPath('data.kpis.editor_vitrine_intent_rate.editor_sessions', 2)
             ->assertJsonPath('data.kpis.editor_vitrine_intent_rate.value', 50)
-            // KPI 4: (2 new artists in 30d + 2 home_leads) / 10 home visitors = 40%
-            ->assertJsonPath('data.kpis.landing_conversion_rate.new_artists', 2)
+            // KPI 4: (3 new artists in 30d + 2 home_leads) / 10 home visitors = 50%
+            ->assertJsonPath('data.kpis.landing_conversion_rate.new_artists', 3)
             ->assertJsonPath('data.kpis.landing_conversion_rate.home_leads', 2)
             ->assertJsonPath('data.kpis.landing_conversion_rate.home_unique_visitors', 10)
-            ->assertJsonPath('data.kpis.landing_conversion_rate.value', 40)
+            ->assertJsonPath('data.kpis.landing_conversion_rate.value', 50)
             // KRs
             ->assertJsonPath('data.krs.kr1_active_artists_weekly.current', 1)
             ->assertJsonPath('data.krs.kr2_vitrine_leads_total.current', 2)
