@@ -8,6 +8,7 @@ use App\Http\Requests\TrackEventRequest;
 use App\Models\Artist;
 use App\Models\Button;
 use App\Models\ButtonClick;
+use App\Models\FunnelEvent;
 use App\Models\PageView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,8 @@ class MetricsController extends Controller
         $validated = $request->validated();
         $type = $validated['type'];
         $username = ltrim(strtolower(trim((string) ($validated['username'] ?? ''))), '@');
-        $rawVisitorId = $validated['visitor_id'] ?? $request->ip() ?? 'anonymous';
+        $providedVisitorId = trim((string) ($validated['visitor_id'] ?? ''));
+        $rawVisitorId = $providedVisitorId !== '' ? $providedVisitorId : ($request->ip() ?? 'anonymous');
         $visitorId = mb_substr((string) $rawVisitorId, 0, 64);
 
         if ($type === 'pageview') {
@@ -62,6 +64,20 @@ class MetricsController extends Controller
                     ]);
                 }
             }
+
+            return response()->noContent();
+        }
+
+        if ($type === 'funnel') {
+            $artist = $request->user('sanctum');
+            FunnelEvent::create([
+                'event_name' => $validated['event_name'],
+                'visitor_id' => $visitorId,
+                'artist_id' => $artist?->id,
+                'source' => $validated['source'] ?? null,
+                'metadata' => $validated['metadata'] ?? null,
+                'occurred_at' => now(),
+            ]);
 
             return response()->noContent();
         }

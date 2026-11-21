@@ -59,7 +59,8 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "email": "artista@exemplo.com",
         "email_verified_at": null,
         "is_published": false,
-        "publication_status": "draft"
+        "publication_status": "draft",
+        "is_admin": false
       },
       "token": "sanctum_token_string"
     }
@@ -92,7 +93,8 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
         "email": "artista@exemplo.com",
         "email_verified_at": "2026-11-16T03:00:00.000000Z",
         "is_published": true,
-        "publication_status": "published"
+        "publication_status": "published",
+        "is_admin": false
       },
       "token": "sanctum_token_string"
     }
@@ -102,7 +104,7 @@ Este documento reúne todos os contratos de endpoints REST, estruturas de DTO, c
 
 ### 2.3 Perfil Autenticado (`GET /api/v1/auth/me`)
 - **Acesso:** Bearer Token.
-- **Resposta de Sucesso (200 OK):** Retorna o objeto completo do artista em `data`, incluindo `email_verified_at`, `is_published` (`boolean`) e `publication_status` (`"draft" | "published"`).
+- **Resposta de Sucesso (200 OK):** Retorna o objeto completo do artista em `data`, incluindo `email_verified_at`, `is_published` (`boolean`), `publication_status` (`"draft" | "published"`) e `is_admin` (`boolean`, calculado no backend exclusivamente quando o e-mail do artista pertence a `ADMIN_EMAILS` e `email_verified_at !== null`).
 - **Respostas de Erro:** 401 Unauthorized (token ausente ou expirado).
 
 ### 2.4 Logout (`POST /api/v1/auth/logout`)
@@ -575,22 +577,269 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
       "link_id": "10"
     }
     ```
+  - **Variante `funnel`:**
+    ```json
+    {
+      "type": "funnel",
+      "event_name": "home_pageview",
+      "visitor_id": "uuid-v4-anonimo",
+      "source": "home_hero",
+      "metadata": {
+        "step": "hero"
+      }
+    }
+    ```
 - **Resposta de Sucesso (204 No Content).**
+- **Respostas de Erro:** `422 Unprocessable Entity` (`type` inválido ou `event_name` fora da lista permitida na variante `funnel`).
 - **Persistência e Atribuição:**
-  - Eventos `pageview` registram ocorrência na tabela `PAGE_VIEWS`.
-  - Eventos `click` registram ocorrência na tabela `BUTTON_CLICKS` e incrementam atomicamente `BUTTONS.clicks_count`.
+  - Eventos `pageview` gravam ocorrência na tabela `PAGE_VIEWS`.
+  - Eventos `click` gravam ocorrência na tabela `BUTTON_CLICKS` e incrementam `BUTTONS.clicks_count`.
+  - Eventos `funnel` gravam ocorrência na tabela `FUNNEL_EVENTS` e não inserem linhas em `PAGE_VIEWS`.
+  - A variante `funnel` aceita `event_name` igual a `home_pageview`, `home_waitlist_vitrine_submitted`, `editor_session` ou `editor_vitrine_cta_clicked`.
+  - Quando a requisição inclui token Sanctum válido, o backend grava `artist_id` no evento `funnel`.
   - O redirecionador `/r/{id}` também persiste em `BUTTON_CLICKS` e incrementa o contador. O frontend não deve emitir `POST /track` duplicado ao navegar via `/r/{id}`.
 - **Observação Crítica:** O frontend envia apenas dados brutos sem classificar. O backend classifica dispositivo e origem do tráfego.
 
+### 8.3 Registrar Lead de Funcionalidade (`POST /api/v1/feature-leads`)
+- **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
+- **Throttle:** Limite de `20` requisições por minuto por IP/usuário.
+- **Corpo da Requisição:**
+  ```json
+  {
+    "feature": "vitrine",
+    "source": "home_hero",
+    "contact_value": "artista@exemplo.com",
+    "metadata": {
+      "selling_type": "prints",
+      "selling_types": ["prints", "originais"]
+    }
+  }
+  ```
+- **Regras de Validação e Normalização:**
+  - `feature`: Opcional (`vitrine` ou `assistente`). O padrão é `vitrine`.
+  - `source`: Obrigatório (`home_hero`, `home_footer`, `home_waitlist` ou `editor_banner`).
+  - `contact_value`: Obrigatório para visitante anônimo e opcional para artista autenticado. O backend remove tags HTML e caracteres de controle, valida e-mail ou `@handle` (`2` a `30` caracteres `[a-zA-Z0-9_.-]`, sem `.` inicial/final ou `..`) e converte o valor para minúsculas. Sem `contact_value`, o artista autenticado usa `artists.email`.
+  - `metadata`: Objeto opcional com até `10` chaves. Aceita `selling_type` (`prints`, `originais`, `comissoes`) e `selling_types` (lista com até `3` itens válidos).
+- **Resposta de Sucesso (`201 Created` para novo lead; `200 OK` para lead existente):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "id": 1,
+      "artist_id": null,
+      "feature": "vitrine",
+      "source": "home_hero",
+      "contact_value": "artista@exemplo.com",
+      "metadata": {
+        "selling_type": "prints"
+      },
+      "created_at": "2026-11-20T22:00:00+00:00",
+      "already_registered": false
+    }
+  }
+  ```
+- **Idempotência:** Quando o mesmo visitante (`artist_id: null`, `feature` e `contact_value`) ou o mesmo artista (`artist_id` e `feature`) envia o formulário novamente, o backend atualiza `source` e `metadata` sem duplicar a linha e retorna `200 OK` com `already_registered: true`.
+- **Respostas de Erro:** `422 Unprocessable Entity` (contato ausente para anônimo, formato inválido, `source` ou `feature` inválido), `429 Too Many Requests`.
+
+### 8.4 Consultar Status do Lead (`GET /api/v1/feature-leads/status?feature={feature}`)
+- **Acesso:** Bearer Token (`Sanctum`) obrigatório.
+- **Parâmetros de Query:** `feature` opcional (`vitrine` ou `assistente`; padrão `vitrine`).
+- **Resposta de Sucesso (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "registered": true,
+      "lead": {
+        "id": 1,
+        "artist_id": 10,
+        "feature": "vitrine",
+        "source": "editor_banner",
+        "contact_value": "artista@exemplo.com",
+        "metadata": {
+          "selling_type": "prints"
+        },
+        "created_at": "2026-11-20T22:00:00+00:00"
+      }
+    }
+  }
+  ```
+- **Lead Ausente:** Quando o artista não possui registro para a `feature`, o endpoint retorna `registered: false` e `lead: null`.
+- **Respostas de Erro:** `401 Unauthorized` (token ausente ou inválido), `422 Unprocessable Entity` (`feature` inválido).
+
 ---
 
-## 9. Esquema Consolidado do Banco de Dados (4 Tabelas)
+## 9. Painel Administrativo (`/api/v1/admin`)
+
+### 9.1 Dashboard Consolidado de Validação (`GET /api/v1/admin/validation-dashboard?days={7|30|90|365}`)
+- **Acesso e Middlewares:** Bearer Token (`auth:sanctum`), verificação administrativa (`admin` — `EnsureAdminArtist`) e limite de taxa (`throttle:60,1`).
+- **Regra de Autorização:** O atributo calculado `is_admin` retorna `true` somente quando o e-mail normalizado do artista consta em `ADMIN_EMAILS` (`config('app.admin_emails')`) **e** `email_verified_at !== null`.
+- **Cabeçalhos:**
+  - `Authorization: Bearer {sanctum_token}`
+  - `Accept: application/json`
+- **Parâmetro de Query:** `days` (opcional; inteiro em `{7, 30, 90, 365}`, padrão `30`).
+- **Resposta de Sucesso (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "period": {
+        "days": 30,
+        "from": "2026-10-22T00:00:00+00:00",
+        "to": "2026-11-21T00:00:00+00:00"
+      },
+      "kpis": {
+        "artist_activation_rate": {
+          "value": 50.0,
+          "target": "> 25%",
+          "activated_artists": 2,
+          "total_artists": 4,
+          "window_days": 30
+        },
+        "public_links_ctr": {
+          "value": 14.29,
+          "target": "15% - 30%",
+          "clicks": 5,
+          "page_views": 35
+        },
+        "editor_vitrine_intent_rate": {
+          "value": 50.0,
+          "target": "> 20%",
+          "vitrine_cta_clicks": 1,
+          "editor_sessions": 2
+        },
+        "landing_conversion_rate": {
+          "value": 40.0,
+          "target": "> 5%",
+          "new_artists": 2,
+          "home_leads": 2,
+          "home_unique_visitors": 10
+        }
+      },
+      "krs": {
+        "kr1_active_artists_weekly": {
+          "current": 1,
+          "target": 15,
+          "progress_pct": 6.67
+        },
+        "kr2_vitrine_leads_total": {
+          "current": 2,
+          "target": 40,
+          "progress_pct": 5.0
+        },
+        "kr3_primary_retention_15d": {
+          "current_pct": 50.0,
+          "returning_artists": 1,
+          "active_artists_base": 2,
+          "target_pct": 40.0,
+          "progress_pct": 100.0
+        }
+      },
+      "leads_breakdown": {
+        "total": 3,
+        "by_feature": {
+          "vitrine": 2,
+          "assistente": 1
+        },
+        "by_source": {
+          "home_hero": 1,
+          "home_footer": 0,
+          "home_waitlist": 1,
+          "editor_banner": 1
+        },
+        "selling_preferences": {
+          "prints": 2,
+          "originais": 1,
+          "comissoes": 1
+        }
+      },
+      "feature_comparison": [
+        {
+          "feature": "vitrine",
+          "leads_total": 2,
+          "unique_artists": 1,
+          "home_leads": 1,
+          "editor_leads": 1,
+          "editor_cta_clicks": 1
+        },
+        {
+          "feature": "assistente",
+          "leads_total": 1,
+          "unique_artists": 1,
+          "home_leads": 1,
+          "editor_leads": 0,
+          "editor_cta_clicks": 0
+        }
+      ],
+      "top_active_artists": [
+        {
+          "id": 2,
+          "name": "Clara Pintura",
+          "username": "clara_pintura",
+          "email": "clara@assin.art",
+          "is_published": true,
+          "active_buttons_count": 1,
+          "page_views": 20,
+          "clicks": 5,
+          "ctr": 25.0,
+          "has_vitrine_interest": true,
+          "vitrine_selling_types": ["originais", "comissoes"],
+          "created_at": "2026-11-18T00:00:00+00:00"
+        }
+      ],
+      "recent_feature_leads": [
+        {
+          "id": 2,
+          "feature": "vitrine",
+          "source": "editor_banner",
+          "artist_id": 2,
+          "artist_name": "Clara Pintura",
+          "artist_username": "clara_pintura",
+          "contact_value": "clara@assin.art",
+          "selling_types": ["originais", "comissoes"],
+          "created_at": "2026-11-20T23:55:00+00:00"
+        }
+      ]
+    }
+  }
+  ```
+- **Limites de Retorno:** `top_active_artists` retorna no máximo `20` artistas (ordenados por `page_views` decrescente e `clicks` decrescente); `recent_feature_leads` retorna no máximo `50` leads (ordenados do mais recente ao mais antigo).
+- **Respostas de Erro:**
+  - `401 Unauthorized`: Token ausente, inválido ou expirado.
+  - `403 Forbidden`: Artista autenticado não possui privilégio administrativo (`{ "status": "error", "message": "Acesso restrito ao administrador." }`).
+  - `422 Unprocessable Entity`: Parâmetro `days` fora de `{7, 30, 90, 365}` ou não numérico.
+
+---
+
+## 10. Esquema Consolidado do Banco de Dados (4 Tabelas)
 
 ```mermaid
 erDiagram
     ARTISTS ||--o{ BUTTONS : "possui (1 : N, CASCADE)"
     ARTISTS ||--o{ PAGE_VIEWS : "recebe (1 : N, CASCADE)"
+    ARTISTS ||--o{ FEATURE_LEADS : "envia (0 : N, SET NULL)"
+    ARTISTS ||--o{ FUNNEL_EVENTS : "gera (0 : N, SET NULL)"
     BUTTONS ||--o{ BUTTON_CLICKS : "registra (1 : N, CASCADE)"
+
+    FEATURE_LEADS {
+        bigint_unsigned id PK
+        bigint_unsigned artist_id FK
+        string feature
+        string source
+        string contact_value
+        json metadata
+        timestamp created_at
+    }
+
+    FUNNEL_EVENTS {
+        bigint_unsigned id PK
+        string event_name
+        string visitor_id
+        bigint_unsigned artist_id FK
+        string source
+        json metadata
+        timestamp occurred_at
+    }
 
     PAGE_VIEWS {
         bigint_unsigned id PK
@@ -676,7 +925,7 @@ erDiagram
 
 ---
 
-## 10. Notas e Regras das Tabelas Analíticas
+## 11. Notas e Regras das Tabelas Analíticas
 
 1. **Tabela `PAGE_VIEWS`:**
    - `referrer_source`: Enum (`ReferrerSource`: `instagram`, `tiktok`, `whatsapp`, `google`, `youtube`, `facebook`, `x`, `direct`, `other`).
@@ -701,7 +950,7 @@ erDiagram
 
 ---
 
-## 11. Regras e Validações de Tipografia e Formatação (Passo 6 — Fontes)
+## 12. Regras e Validações de Tipografia e Formatação (Passo 6 — Fontes)
 
 1. **Campos Tipográficos do Perfil (`ARTISTS`):**
    - `profile_font_family`: Família tipográfica do perfil (padrão `'Space Grotesk'`).

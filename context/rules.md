@@ -146,10 +146,10 @@ Execute todo plano de tarefas (`context/tasks_*.md`) seguindo estritamente estas
 
 1. **Faça commits atômicos por tarefa:** Ao concluir cada tarefa de um checklist (`context/tasks_*.md`), marque `[x]` e execute um commit imediato com prefixo semântico (`feat:`, `fix:`, `style:`, `test:`, `docs:`, `chore:`).
 2. **Proíba validações intermediárias:** Nunca execute `npm run lint`, `npm run build`, `npm test` ou `git diff` entre micro-tarefas do mesmo lote.
-3. **Valide uma única vez no encerramento:** Execute `git diff --stat`, `npm run lint` (0 erros e 0 warnings), `npm run build` (`tsc -b && vite build --logLevel error`) e `npm test` (`100%` de aprovação), mais `npm run test:e2e` antes de PR para `main`, **exclusivamente uma vez** ao finalizar todas as tarefas da ordem do usuário.
+3. **Valide uma única vez no encerramento local (somente escopo alterado):** Execute `git diff --stat`, `npx eslint <arquivos_alterados>` (0 erros e 0 warnings), `npm run build` (`tsc -b && vite build --logLevel error`) e **`npm run test:changed`** (ou **`npm run test:<bloco>`** para o domínio afetado), **exclusivamente uma vez** ao finalizar todas as tarefas da ordem do usuário.
 4. **Adote saída compacta padrão e blocos de domínio (`GLB-09`):**
-   - Execute `npm test` (`vitest run --reporter=agent --silent=passed-only`), `npm run build` (`tsc -b && vite build --logLevel error`), `npm run test:e2e` (`playwright test --reporter=line`) e comandos Git resumidos (`git status -s`, `git diff --stat`).
-   - Em correções localizadas, teste apenas o bloco afetado com `npm run test:changed` ou `npm run test:<bloco>` (`auth`, `onboarding`, `editor`, `profile`, `services`, `global`); no fechamento do lote e no CI pré-`main`, execute a suíte completa `npm test`.
+   - Use **`npm run test:changed`** ou **`npm run test:<bloco>`** (`auth`, `onboarding`, `editor`, `profile`, `services`, `global`) como padrão local. **Não rode a suíte completa (`npm test`) nem `npm run test:e2e` localmente** em entregas/correções rotineiras; a bateria completa roda no **CI pré-`main`** (`.github/workflows/ci-pre-main.yml`) ou apenas quando o usuário solicitar explicitamente.
+   - Use `npm run build` (`tsc -b && vite build --logLevel error`) e comandos Git resumidos (`git status -s`, `git diff --stat`).
    - Use `npm run test:verbose` apenas quando precisar inspecionar logs completos de uma falha.
    - **Proibição estrita:** Nunca use `eslint --quiet` (viola a exigência de `0` warnings na Regra 9.3) nem `vite --logLevel silent` (oculta erros de build).
 

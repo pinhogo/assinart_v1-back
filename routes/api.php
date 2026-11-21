@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 | - api_profile.php: Artist profile show/update (PUT/PATCH) and media uploads (avatar, cover, background)
 | - api_buttons.php: Buttons CRUD (PATCH), card thumbnails, bulk clear, and drag & drop reordering
 | - api_metrics.php: Anonymous telemetry tracking (/track) and analytical metrics summary
+| - api_admin.php: Admin-only validation dashboard and operational insights
 |
 */
 
@@ -22,4 +23,5 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api_profile.php';
     require __DIR__.'/api_buttons.php';
     require __DIR__.'/api_metrics.php';
+    require __DIR__.'/api_admin.php';
 });
