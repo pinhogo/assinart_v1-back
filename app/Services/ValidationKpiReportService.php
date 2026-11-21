@@ -85,7 +85,7 @@ class ValidationKpiReportService
     }
 
     /** @return array<int, string> */
-    private function extractSellingTypes(mixed $metadata): array
+    public function extractSellingTypes(mixed $metadata): array
     {
         if (! is_array($metadata)) {
             return [];
