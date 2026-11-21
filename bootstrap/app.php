@@ -38,6 +38,7 @@ if (($_ENV['APP_ENV'] ?? $_SERVER['APP_ENV'] ?? getenv('APP_ENV') ?: 'production
     }
 }
 
+use App\Http\Middleware\EnsureAdminArtist;
 use App\Http\Middleware\HandlePublicProfileCors;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -58,6 +59,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->alias(['admin' => EnsureAdminArtist::class]);
         $middleware->replace(HandleCors::class, HandlePublicProfileCors::class);
         $middleware->trustProxies(at: '*');
         $middleware->append(SecurityHeaders::class);
