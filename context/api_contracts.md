@@ -575,12 +575,95 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
       "link_id": "10"
     }
     ```
+  - **Variante `funnel`:**
+    ```json
+    {
+      "type": "funnel",
+      "event_name": "home_pageview",
+      "visitor_id": "uuid-v4-anonimo",
+      "source": "home_hero",
+      "metadata": {
+        "step": "hero"
+      }
+    }
+    ```
 - **Resposta de Sucesso (204 No Content).**
+- **Respostas de Erro:** `422 Unprocessable Entity` (`type` inválido ou `event_name` fora da lista permitida na variante `funnel`).
 - **Persistência e Atribuição:**
-  - Eventos `pageview` registram ocorrência na tabela `PAGE_VIEWS`.
-  - Eventos `click` registram ocorrência na tabela `BUTTON_CLICKS` e incrementam atomicamente `BUTTONS.clicks_count`.
+  - Eventos `pageview` gravam ocorrência na tabela `PAGE_VIEWS`.
+  - Eventos `click` gravam ocorrência na tabela `BUTTON_CLICKS` e incrementam `BUTTONS.clicks_count`.
+  - Eventos `funnel` gravam ocorrência na tabela `FUNNEL_EVENTS` e não inserem linhas em `PAGE_VIEWS`.
+  - A variante `funnel` aceita `event_name` igual a `home_pageview`, `home_waitlist_vitrine_submitted`, `editor_session` ou `editor_vitrine_cta_clicked`.
+  - Quando a requisição inclui token Sanctum válido, o backend grava `artist_id` no evento `funnel`.
   - O redirecionador `/r/{id}` também persiste em `BUTTON_CLICKS` e incrementa o contador. O frontend não deve emitir `POST /track` duplicado ao navegar via `/r/{id}`.
 - **Observação Crítica:** O frontend envia apenas dados brutos sem classificar. O backend classifica dispositivo e origem do tráfego.
+
+### 8.3 Registrar Lead de Funcionalidade (`POST /api/v1/feature-leads`)
+- **Acesso:** Público com suporte opcional a Bearer Token (`Sanctum`).
+- **Throttle:** Limite de `20` requisições por minuto por IP/usuário.
+- **Corpo da Requisição:**
+  ```json
+  {
+    "feature": "vitrine",
+    "source": "home_hero",
+    "contact_value": "artista@exemplo.com",
+    "metadata": {
+      "selling_type": "prints",
+      "selling_types": ["prints", "originais"]
+    }
+  }
+  ```
+- **Regras de Validação e Normalização:**
+  - `feature`: Opcional (`vitrine` ou `assistente`). O padrão é `vitrine`.
+  - `source`: Obrigatório (`home_hero`, `home_footer`, `home_waitlist` ou `editor_banner`).
+  - `contact_value`: Obrigatório para visitante anônimo e opcional para artista autenticado. O backend remove tags HTML e caracteres de controle, valida e-mail ou `@handle` (`2` a `30` caracteres `[a-zA-Z0-9_.-]`, sem `.` inicial/final ou `..`) e converte o valor para minúsculas. Sem `contact_value`, o artista autenticado usa `artists.email`.
+  - `metadata`: Objeto opcional com até `10` chaves. Aceita `selling_type` (`prints`, `originais`, `comissoes`) e `selling_types` (lista com até `3` itens válidos).
+- **Resposta de Sucesso (`201 Created` para novo lead; `200 OK` para lead existente):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "id": 1,
+      "artist_id": null,
+      "feature": "vitrine",
+      "source": "home_hero",
+      "contact_value": "artista@exemplo.com",
+      "metadata": {
+        "selling_type": "prints"
+      },
+      "created_at": "2026-11-20T22:00:00+00:00",
+      "already_registered": false
+    }
+  }
+  ```
+- **Idempotência:** Quando o mesmo visitante (`artist_id: null`, `feature` e `contact_value`) ou o mesmo artista (`artist_id` e `feature`) envia o formulário novamente, o backend atualiza `source` e `metadata` sem duplicar a linha e retorna `200 OK` com `already_registered: true`.
+- **Respostas de Erro:** `422 Unprocessable Entity` (contato ausente para anônimo, formato inválido, `source` ou `feature` inválido), `429 Too Many Requests`.
+
+### 8.4 Consultar Status do Lead (`GET /api/v1/feature-leads/status?feature={feature}`)
+- **Acesso:** Bearer Token (`Sanctum`) obrigatório.
+- **Parâmetros de Query:** `feature` opcional (`vitrine` ou `assistente`; padrão `vitrine`).
+- **Resposta de Sucesso (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "registered": true,
+      "lead": {
+        "id": 1,
+        "artist_id": 10,
+        "feature": "vitrine",
+        "source": "editor_banner",
+        "contact_value": "artista@exemplo.com",
+        "metadata": {
+          "selling_type": "prints"
+        },
+        "created_at": "2026-11-20T22:00:00+00:00"
+      }
+    }
+  }
+  ```
+- **Lead Ausente:** Quando o artista não possui registro para a `feature`, o endpoint retorna `registered: false` e `lead: null`.
+- **Respostas de Erro:** `401 Unauthorized` (token ausente ou inválido), `422 Unprocessable Entity` (`feature` inválido).
 
 ---
 
@@ -590,7 +673,29 @@ Endpoints simétricos para upload (`multipart/form-data`) e exclusão de mídia 
 erDiagram
     ARTISTS ||--o{ BUTTONS : "possui (1 : N, CASCADE)"
     ARTISTS ||--o{ PAGE_VIEWS : "recebe (1 : N, CASCADE)"
+    ARTISTS ||--o{ FEATURE_LEADS : "envia (0 : N, SET NULL)"
+    ARTISTS ||--o{ FUNNEL_EVENTS : "gera (0 : N, SET NULL)"
     BUTTONS ||--o{ BUTTON_CLICKS : "registra (1 : N, CASCADE)"
+
+    FEATURE_LEADS {
+        bigint_unsigned id PK
+        bigint_unsigned artist_id FK
+        string feature
+        string source
+        string contact_value
+        json metadata
+        timestamp created_at
+    }
+
+    FUNNEL_EVENTS {
+        bigint_unsigned id PK
+        string event_name
+        string visitor_id
+        bigint_unsigned artist_id FK
+        string source
+        json metadata
+        timestamp occurred_at
+    }
 
     PAGE_VIEWS {
         bigint_unsigned id PK
