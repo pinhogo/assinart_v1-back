@@ -88,7 +88,7 @@ class AuthController extends Controller
             'token' => $token,
             'artist' => $artist,
             'data' => [
-                'user' => $artist->only(['id', 'name', 'username', 'email', 'email_verified_at', 'is_published', 'publication_status']),
+                'user' => $artist->only(['id', 'name', 'username', 'email', 'email_verified_at', 'is_published', 'publication_status', 'is_admin']),
                 'token' => $token,
             ],
         ], $status);
