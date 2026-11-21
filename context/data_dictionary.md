@@ -14,7 +14,32 @@
 erDiagram
     ARTISTS ||--o{ BUTTONS : "possui (1 : N, CASCADE)"
     ARTISTS ||--o{ PAGE_VIEWS : "recebe (1 : N, CASCADE)"
+    ARTISTS ||--o{ FEATURE_LEADS : "envia (0 : N, SET NULL)"
+    ARTISTS ||--o{ FUNNEL_EVENTS : "gera (0 : N, SET NULL)"
     BUTTONS ||--o{ BUTTON_CLICKS : "registra (1 : N, CASCADE)"
+
+    FEATURE_LEADS {
+        bigint_unsigned id PK
+        bigint_unsigned artist_id FK
+        string feature
+        string source
+        string contact_value
+        json metadata
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    FUNNEL_EVENTS {
+        bigint_unsigned id PK
+        string event_name
+        string visitor_id
+        bigint_unsigned artist_id FK
+        string source
+        json metadata
+        timestamp occurred_at
+        timestamp created_at
+        timestamp updated_at
+    }
 
     PAGE_VIEWS {
         bigint_unsigned id PK
@@ -302,3 +327,50 @@ Armazena hashes SHA-256 de tokens de uso único e expiração temporária para c
 | `token_hash` | `VARCHAR(64)` | Não | — | Hash SHA-256 em hexadecimal do token enviado por e-mail. |
 | `expires_at` | `TIMESTAMP` | Não | — | Data e hora limite para uso do token (`+24h`). |
 | `created_at` | `TIMESTAMP` | Sim | `NULL` | Carimbo de criação do token. |
+
+---
+
+## 8. Tabela `feature_leads`
+
+Armazena leads de interesse em novas funcionalidades enviados por visitantes anônimos ou artistas autenticados.
+
+- **Nome no Banco:** `feature_leads`
+- **Model Eloquent:** `App\Models\FeatureLead`
+- **Migration:** `database/migrations/2026_11_20_000001_create_feature_leads_table.php`
+- **Chave Primária:** `id` (`BIGINT UNSIGNED AUTO_INCREMENT`)
+- **Chave Estrangeira:** `artist_id` referencia `artists(id)` com `ON DELETE SET NULL`
+- **Índices:** `(feature, source)`, `(artist_id, feature)` e `(created_at)`
+
+| Coluna | Tipo SQL | Nulo? | Padrão | Descrição Funcional |
+|---|---|:---:|---|---|
+| `id` | `BIGINT UNSIGNED` | Não | *Auto Increment* | Identificador único do lead. |
+| `artist_id` | `BIGINT UNSIGNED` | Sim | `NULL` | Identificador do artista autenticado quando disponível. |
+| `feature` | `VARCHAR(50)` | Não | `'vitrine'` | Funcionalidade solicitada (`vitrine` ou `assistente`). |
+| `source` | `VARCHAR(50)` | Não | — | Ponto de captura (`home_hero`, `home_footer`, `home_waitlist` ou `editor_banner`). |
+| `contact_value` | `VARCHAR(255)` | Sim | `NULL` | E-mail ou `@handle` normalizado em minúsculas. |
+| `metadata` | `JSON` | Sim | `NULL` | Metadados de interesse (como `selling_type` e `selling_types`). |
+| `created_at` / `updated_at` | `TIMESTAMP` | Sim | `CURRENT_TIMESTAMP` | Carimbos de criação e atualização. |
+
+---
+
+## 9. Tabela `funnel_events`
+
+Armazena eventos de funil da landing page e do editor para o relatório de KPIs de validação.
+
+- **Nome no Banco:** `funnel_events`
+- **Model Eloquent:** `App\Models\FunnelEvent`
+- **Migration:** `database/migrations/2026_11_20_000002_create_funnel_events_table.php`
+- **Chave Primária:** `id` (`BIGINT UNSIGNED AUTO_INCREMENT`)
+- **Chave Estrangeira:** `artist_id` referencia `artists(id)` com `ON DELETE SET NULL`
+- **Índices:** `(event_name, occurred_at)` e `(event_name, visitor_id)`
+
+| Coluna | Tipo SQL | Nulo? | Padrão | Descrição Funcional |
+|---|---|:---:|---|---|
+| `id` | `BIGINT UNSIGNED` | Não | *Auto Increment* | Identificador único do evento de funil. |
+| `event_name` | `VARCHAR(80)` | Não | — | Nome do evento (`home_pageview`, `home_waitlist_vitrine_submitted`, `editor_session` ou `editor_vitrine_cta_clicked`). |
+| `visitor_id` | `VARCHAR(64)` | Não | — | Identificador do visitante anônimo ou IP truncado. |
+| `artist_id` | `BIGINT UNSIGNED` | Sim | `NULL` | Identificador do artista autenticado quando disponível. |
+| `source` | `VARCHAR(50)` | Sim | `NULL` | Origem opcional informada no evento. |
+| `metadata` | `JSON` | Sim | `NULL` | Dados adicionais opcionais do evento. |
+| `occurred_at` | `TIMESTAMP` | Não | `CURRENT_TIMESTAMP` | Data e hora da ocorrência do evento. |
+| `created_at` / `updated_at` | `TIMESTAMP` | Sim | `CURRENT_TIMESTAMP` | Carimbos de criação e atualização. |
