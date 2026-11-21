@@ -20,7 +20,7 @@ class TrackEventRequest extends FormRequest
             'type' => ['required', 'string', 'in:pageview,click,funnel'],
             'event_name' => ['required_if:type,funnel', 'nullable', 'string', 'in:home_pageview,home_waitlist_vitrine_submitted,editor_session,editor_vitrine_cta_clicked'],
             'source' => ['nullable', 'string', 'max:50'],
-            'metadata' => ['nullable', 'array'],
+            'metadata' => ['nullable', 'array', 'max:20'],
             'username' => ['nullable', 'string', 'max:50'],
             'link_id' => ['nullable', 'integer', 'min:1'],
             'visitor_id' => ['nullable', 'string', 'max:64'],
